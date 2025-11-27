@@ -7,21 +7,52 @@ st.set_page_config(page_title="Sistem Rekomendasi Produk", layout="wide")
 # --- FUNGSI LOAD DATA (Dichache agar cepat) ---
 @st.cache_data
 def load_data():
-    # Load data yang sudah kita save sebelumnya
-    predictions = pd.read_pickle('app_data/predicted_ratings.pkl')
+    """
+    Fungsi ini memuat data yang terpecah-pecah (chunks) 
+    dan menggabungkannya kembali menjadi dataframe utuh.
+    """
+    
+    # 1. LOAD PREDICTED RATINGS (Terpecah jadi 6 file)
+    rating_parts = []
+    # Loop dari 1 sampai 6 (sesuai jumlah file di screenshot)
+    for i in range(1, 7):
+        filename = f'app_data/predicted_ratings_part{i}.pkl'
+        # compression='gzip' harus ada jika saat save menggunakan gzip
+        part = pd.read_pickle(filename, compression='gzip')
+        rating_parts.append(part)
+    
+    # Gabungkan kembali menjadi satu dataframe besar
+    predictions = pd.concat(rating_parts)
+
+    # 2. LOAD USER HISTORY (Terpecah jadi 6 file)
+    history_parts = []
+    for i in range(1, 7):
+        filename = f'app_data/user_history_part{i}.pkl'
+        # Cek try-except jaga-jaga jika file history kurang dari 6
+        try:
+            part = pd.read_pickle(filename, compression='gzip')
+            history_parts.append(part)
+        except FileNotFoundError:
+            continue # Lanjut jika file tidak ditemukan
+            
+    # Gabungkan kembali
+    history = pd.concat(history_parts)
+
+    # 3. LOAD PRODUCT METADATA (Single file, tidak dipecah)
     products = pd.read_pickle('app_data/product_metadata.pkl')
-    history = pd.read_pickle('app_data/user_history.pkl')
+
     return predictions, products, history
 
-# Load data
+# --- PROSES MEMUAT DATA ---
 try:
-    predicted_ratings_df, full_product, order_cust = load_data()
-    st.success("Data berhasil dimuat!")
-except FileNotFoundError:
-    st.error("File data tidak ditemukan. Pastikan Anda sudah menjalankan script training dan menyimpan file pkl.")
+    with st.spinner('Sedang menyiapkan data (Unpacking & Merging)...'):
+        predicted_ratings_df, full_product, order_cust = load_data()
+    st.success("✅ Data berhasil dimuat!")
+except Exception as e:
+    st.error(f"Terjadi kesalahan saat memuat data: {e}")
     st.stop()
 
-# --- FUNGSI REKOMENDASI (Dicopy dari script Anda) ---
+# --- FUNGSI REKOMENDASI (Logika SVD) ---
 def get_svd_recommendations(customer_id, n_recs=10):
     if customer_id not in predicted_ratings_df.index: 
         return []
@@ -30,7 +61,7 @@ def get_svd_recommendations(customer_id, n_recs=10):
     # Kembalikan list Product ID (mid)
     return [str(mid) for mid in sorted_preds.head(n_recs).index]
 
-# --- USER INTERFACE ---
+# --- USER INTERFACE (UI) ---
 st.title("🛍️ Simulasi Rekomendasi Produk (SVD)")
 
 # 1. Sidebar untuk memilih User
