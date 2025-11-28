@@ -1,121 +1,186 @@
 import streamlit as st
 import pandas as pd
 
-# --- KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="Sistem Rekomendasi Produk", layout="wide")
+# --- PAGE CONFIGURATION ---
+st.set_page_config(
+    page_title="Product Recommender System",
+    page_icon="🛍️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- FUNGSI LOAD DATA (Dichache agar cepat) ---
+# --- LOAD DATA FUNCTION (Cached for performance) ---
 @st.cache_data
 def load_data():
     """
-    Fungsi ini memuat data yang terpecah-pecah (chunks) 
-    dan menggabungkannya kembali menjadi dataframe utuh.
+    Loads data chunks (split files) and merges them back into full dataframes.
     """
     
-    # 1. LOAD PREDICTED RATINGS (Terpecah jadi 6 file)
+    # 1. LOAD PREDICTED RATINGS (Split into 6 files)
     rating_parts = []
-    # Loop dari 1 sampai 6 (sesuai jumlah file di screenshot)
+    # Loop from 1 to 6
     for i in range(1, 7):
         filename = f'app_data/predicted_ratings_part{i}.pkl'
-        # compression='gzip' harus ada jika saat save menggunakan gzip
+        # compression='gzip' is required as we saved it using gzip
         part = pd.read_pickle(filename, compression='gzip')
         rating_parts.append(part)
     
-    # Gabungkan kembali menjadi satu dataframe besar
+    # Merge back into one large dataframe
     predictions = pd.concat(rating_parts)
 
-    # 2. LOAD USER HISTORY (Terpecah jadi 6 file)
+    # 2. LOAD USER HISTORY (Split into 2 files)
     history_parts = []
-    for i in range(1, 7):
+    for i in range(1, 3):
         filename = f'app_data/user_history_part{i}.pkl'
-        # Cek try-except jaga-jaga jika file history kurang dari 6
+        # Try-except block in case history files are fewer than 2
         try:
             part = pd.read_pickle(filename, compression='gzip')
             history_parts.append(part)
         except FileNotFoundError:
-            continue # Lanjut jika file tidak ditemukan
+            continue # Skip if file not found
             
-    # Gabungkan kembali
+    # Merge back
     history = pd.concat(history_parts)
 
-    # 3. LOAD PRODUCT METADATA (Single file, tidak dipecah)
+    # 3. LOAD PRODUCT METADATA (Single file)
     products = pd.read_pickle('app_data/product_metadata.pkl')
 
     return predictions, products, history
 
-# --- PROSES MEMUAT DATA ---
+# --- LOADING PROCESS ---
 try:
-    with st.spinner('Sedang menyiapkan data (Unpacking & Merging)...'):
+    with st.spinner('Loading data (Unpacking & Merging)...'):
         predicted_ratings_df, full_product, order_cust = load_data()
-    st.success("✅ Data berhasil dimuat!")
+    # Toast notification is less intrusive than a big green bar
+    st.toast("✅ Data loaded successfully!", icon="🚀")
 except Exception as e:
-    st.error(f"Terjadi kesalahan saat memuat data: {e}")
+    st.error(f"Error loading data: {e}")
     st.stop()
 
-# --- FUNGSI REKOMENDASI (Logika SVD) ---
+# --- RECOMMENDATION LOGIC (SVD) ---
 def get_svd_recommendations(customer_id, n_recs=10):
     if customer_id not in predicted_ratings_df.index: 
         return []
-    # Ambil row user tersebut, urutkan dari nilai tertinggi
+    # Get user row, sort by highest predicted rating
     sorted_preds = predicted_ratings_df.loc[customer_id].sort_values(ascending=False)
-    # Kembalikan list Product ID (mid)
+    # Return list of Product IDs (mid)
     return [str(mid) for mid in sorted_preds.head(n_recs).index]
 
 # --- USER INTERFACE (UI) ---
-st.title("🛍️ Simulasi Rekomendasi Produk (SVD)")
 
-# 1. Sidebar untuk memilih User
-st.sidebar.header("Pilih Customer")
-
-# Ambil list semua customer ID yang ada di data prediksi
-available_users = predicted_ratings_df.index.unique().tolist()
-selected_user_id = st.sidebar.selectbox("Masukkan/Pilih Customer ID:", available_users)
-
-if st.sidebar.button("Generate Rekomendasi"):
+# Sidebar
+with st.sidebar:
+    st.title("🛒 Control Panel")
     
-    # --- PROSES UTAMA ---
+    st.markdown("### 1. Select User")
+    # Get list of unique users
+    available_users = predicted_ratings_df.index.unique().tolist()
+    selected_user_id = st.selectbox(
+        "Search or Select Customer ID:", 
+        available_users,
+        help="Type to search for a specific user ID"
+    )
+    
+    st.markdown("---")
+    st.markdown("### ℹ️ About Model")
+    st.info(
+        """
+        **Method:** Truncated SVD (Matrix Factorization)
+        **Goal:** Predict latent preferences based on past interactions.
+        """
+    )
+
+# Main Page
+st.title("🛍️ Product Recommendation Simulation")
+st.markdown(f"Analyzed behavior for Customer ID: **{selected_user_id}**")
+
+# Button to trigger logic
+if st.button("Generate Recommendations", type="primary"):
+    
+    # --- DATA PROCESSING ---
+    
+    # 1. Get History
+    user_history_mids = order_cust[order_cust['customer_id'] == selected_user_id]['mid'].unique().tolist()
+    
+    # 2. Get Recommendations
+    recs_mids = get_svd_recommendations(selected_user_id, n_recs=10)
+
+    # --- DISPLAY METRICS ---
+    col_metric1, col_metric2 = st.columns(2)
+    with col_metric1:
+        st.metric(label="Total Items Purchased", value=len(user_history_mids))
+    with col_metric2:
+        st.metric(label="Recommendations Generated", value=len(recs_mids))
+
+    st.markdown("---")
+
+    # --- DISPLAY TABLES ---
+    
     col1, col2 = st.columns(2)
     
-    # A. Tampilkan History User (Apa yang pernah dibeli)
+    # LEFT COLUMN: HISTORY
     with col1:
-        st.subheader("📜 Riwayat Pembelian User")
-        
-        # Filter history berdasarkan user yang dipilih
-        user_history_mids = order_cust[order_cust['customer_id'] == selected_user_id]['mid'].unique().tolist()
+        st.subheader("📜 Purchase History")
+        st.caption("Items this user has actually bought/interacted with.")
         
         if user_history_mids:
-            # Join dengan tabel produk untuk dapat nama barang
             history_df = pd.DataFrame({'mid': user_history_mids})
-            history_df['mid'] = history_df['mid'].astype(str) # Pastikan tipe data sama
+            history_df['mid'] = history_df['mid'].astype(str)
             
-            # Merge untuk ambil deskripsi
+            # Merge to get descriptions
             history_display = history_df.merge(
                 full_product, 
                 on='mid', 
                 how='left'
             )
-            st.dataframe(history_display[['mid', 'mid_desc', 'desc2']], use_container_width=True)
+            
+            # Clean up columns for display
+            display_df = history_display[['mid', 'mid_desc', 'desc2']].rename(columns={
+                'mid': 'Product ID',
+                'mid_desc': 'Product Name',
+                'desc2': 'Category/Details'
+            })
+            
+            st.dataframe(
+                display_df, 
+                use_container_width=True, 
+                hide_index=True,
+                height=400
+            )
         else:
-            st.info("User ini belum memiliki riwayat pembelian di data history.")
+            st.info("This user has no purchase history in the dataset.")
 
-    # B. Tampilkan Rekomendasi SVD
+    # RIGHT COLUMN: RECOMMENDATIONS
     with col2:
-        st.subheader("✨ Top 10 Rekomendasi (SVD)")
-        
-        recs_mids = get_svd_recommendations(selected_user_id, n_recs=10)
+        st.subheader("✨ Top 10 Recommendations")
+        st.caption("Predicted items based on SVD Latent Features.")
         
         if recs_mids:
             recs_df = pd.DataFrame({'mid': recs_mids})
             recs_df['mid'] = recs_df['mid'].astype(str)
             
-            # Merge dengan info produk
+            # Merge to get descriptions
             recs_display = recs_df.merge(
                 full_product, 
                 on='mid', 
                 how='left'
             )
             
-            # Tampilkan
-            st.dataframe(recs_display[['mid', 'mid_desc', 'desc2']], use_container_width=True)
+            # Clean up columns for display
+            display_recs = recs_display[['mid', 'mid_desc', 'desc2']].rename(columns={
+                'mid': 'Product ID',
+                'mid_desc': 'Product Name',
+                'desc2': 'Category/Details'
+            })
+            
+            st.dataframe(
+                display_recs, 
+                use_container_width=True, 
+                hide_index=True,
+                height=400
+            )
         else:
-            st.warning("User ini tidak ditemukan dalam data training SVD (Cold Start).")
+            st.warning("Cold Start: No recommendations available for this user.")
+
+else:
+    st.info("👈 Please select a Customer ID from the sidebar and click 'Generate Recommendations'")
