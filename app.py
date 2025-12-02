@@ -1,5 +1,42 @@
 import streamlit as st
 import pandas as pd
+import re
+
+def mask_product_name(name):
+    """
+    Convert product name by taking the first alphabet of each word 
+    until the first numeric-containing word. After that, keep words unchanged.
+    
+    Example:
+    MILKU ORIGINAL 200 ML ISI 12 -> MO 200 ML ISI 12
+    MILKU COKLAT PREMIUM 200 ML -> MCP 200 ML
+    FLORIDINA ORANGE BTL 350ML HRG PROMO -> FOB 350ML HRG PROMO
+    NOODLE SEDAAP MIE CUP KARI MERCON 79GR -> NSMCKM 79GR
+    """
+    
+    words = name.split()
+    masked_letters = []
+    remaining_words = []
+    numeric_found = False
+    
+    for w in words:
+        if not numeric_found:
+            if re.search(r'\d', w):  
+                # word contains a number → stop masking
+                numeric_found = True
+                remaining_words.append(w)
+            else:
+                masked_letters.append(w[0])  # take first letter
+        else:
+            remaining_words.append(w)
+
+    masked_part = "".join(masked_letters)
+    
+    if remaining_words:
+        return masked_part + " " + " ".join(remaining_words)
+    else:
+        return masked_part
+
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -73,12 +110,18 @@ with st.sidebar:
     st.title("🛒 Control Panel")
     
     st.markdown("### 1. Select User")
-    # Get list of unique users
     available_users = predicted_ratings_df.index.unique().tolist()
     selected_user_id = st.selectbox(
         "Search or Select Customer ID:", 
         available_users,
         help="Type to search for a specific user ID"
+    )
+
+    st.markdown("### 2. Number of Recommendations")
+    n_recs = st.selectbox(
+        "Select how many items to recommend:",
+        [5, 10, 15, 20, 25],
+        index=1  # default: 10
     )
     
     st.markdown("---")
@@ -89,6 +132,7 @@ with st.sidebar:
         **Goal:** Predict latent preferences based on past interactions.
         """
     )
+
 
 # Main Page
 st.title("🛍️ Product Recommendation Simulation")
@@ -103,7 +147,8 @@ if st.button("Generate Recommendations", type="primary"):
     user_history_mids = order_cust[order_cust['customer_id'] == selected_user_id]['mid'].unique().tolist()
     
     # 2. Get Recommendations
-    recs_mids = get_svd_recommendations(selected_user_id, n_recs=10)
+    recs_mids = get_svd_recommendations(selected_user_id, n_recs=n_recs)
+
 
     # --- DISPLAY METRICS ---
     col_metric1, col_metric2 = st.columns(2)
@@ -140,6 +185,9 @@ if st.button("Generate Recommendations", type="primary"):
                 'mid_desc': 'Product Name',
                 'desc2': 'Category/Details'
             })
+
+            display_df['Product Name'] = display_df['Product Name'].apply(mask_product_name)
+
             
             st.dataframe(
                 display_df, 
@@ -152,7 +200,7 @@ if st.button("Generate Recommendations", type="primary"):
 
     # RIGHT COLUMN: RECOMMENDATIONS
     with col2:
-        st.subheader("✨ Top 10 Recommendations")
+        st.subheader(f"✨ Top {len(recs_mids)} Recommendations")
         st.caption("Predicted items based on SVD Latent Features.")
         
         if recs_mids:
@@ -172,6 +220,7 @@ if st.button("Generate Recommendations", type="primary"):
                 'mid_desc': 'Product Name',
                 'desc2': 'Category/Details'
             })
+            display_recs['Product Name'] = display_recs['Product Name'].apply(mask_product_name)
             
             st.dataframe(
                 display_recs, 
