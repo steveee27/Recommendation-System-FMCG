@@ -4,8 +4,8 @@ import re
 
 # --- 1. CONFIGURATION & UTILS ---
 st.set_page_config(
-    page_title="FMCG Recommender System",
-    page_icon="🛍️",
+    page_title="Sales Assist: FMCG General Trade",
+    page_icon="🛒",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -40,7 +40,7 @@ def mask_product_name(name):
 @st.cache_data
 def load_data():
     """
-    Loads data chunks (split files) and merges them back.
+    Loads data chunks and merges them back.
     """
     # 1. LOAD PREDICTED RATINGS (6 Parts)
     rating_parts = []
@@ -50,9 +50,9 @@ def load_data():
         rating_parts.append(part)
     predictions = pd.concat(rating_parts)
 
-    # 2. LOAD USER HISTORY (2 Parts based on your request)
+    # 2. LOAD USER HISTORY (Up to 6 parts safe check)
     history_parts = []
-    for i in range(1, 7): # Adjusted loop to check up to 6 just in case, typical safe approach
+    for i in range(1, 7):
         filename = f'app_data/user_history_part{i}.pkl'
         try:
             part = pd.read_pickle(filename, compression='gzip')
@@ -66,9 +66,9 @@ def load_data():
 
     return predictions, products, history
 
-# Load data globally to ensure availability
+# Load data globally
 try:
-    with st.spinner('Menyiapkan database sistem (Loading & Merging)...'):
+    with st.spinner('Menyiapkan database outlet & produk...'):
         predicted_ratings_df, full_product, order_cust = load_data()
 except Exception as e:
     st.error(f"Gagal memuat data: {e}")
@@ -85,58 +85,57 @@ def go_to_simulation():
 # Sidebar Navigation Logic
 st.sidebar.title("Menu Aplikasi")
 selection = st.sidebar.radio(
-    "Pilih Halaman:", 
-    ["🏠 Beranda & Panduan", "🚀 Simulasi Rekomendasi"],
+    "Navigasi:", 
+    ["🏠 Beranda (Home)", "📋 Cek Toko & Rekomendasi"],
     index=0 if st.session_state.page == "home" else 1
 )
 
-if selection == "🏠 Beranda & Panduan":
+if selection == "🏠 Beranda (Home)":
     st.session_state.page = "home"
 else:
     st.session_state.page = "simulation"
 
 
-# --- 4. PAGE: HOMEPAGE (PENJELASAN) ---
+# --- 4. PAGE: HOMEPAGE (PENJELASAN KHUSUS SALES) ---
 if st.session_state.page == "home":
-    st.title("Sistem Rekomendasi Produk FMCG")
-    st.markdown("#### *Optimasi Cross-Selling Berbasis Data Historis*")
+    # Header yang lebih spesifik ke use-case Sales GT
+    st.title("Sistem Pendukung Keputusan: FMCG General Trade")
+    st.markdown("### *Alat Bantu Sales untuk Analisis History & Cross-Selling Outlet*")
     
     st.divider()
 
     col_info1, col_info2 = st.columns([1.5, 1])
 
     with col_info1:
-        st.subheader("📌 Tentang Aplikasi Ini")
+        st.subheader("📌 Fungsi Aplikasi untuk Salesman")
         st.write("""
-        Aplikasi ini dirancang khusus untuk tim **Sales & Marketing** guna membantu mengidentifikasi peluang penjualan baru (*cross-selling*) kepada pelanggan yang sudah ada (existing customers).
+        Aplikasi ini dirancang untuk membantu Tim Sales saat melakukan kunjungan (*visiting*) ke outlet General Trade (GT). 
+        Tujuan utamanya adalah memastikan Sales tidak hanya mencatat order rutin, tetapi juga menawarkan produk baru yang **potensial laku** di toko tersebut.
         
-        Daripada menebak-nebak produk apa yang harus ditawarkan, sistem ini menganalisis pola belanja ribuan pelanggan untuk memberikan rekomendasi yang presisi.
+        **Apa yang bisa Anda lakukan di sini?**
+        1.  **Cek Riwayat Belanja (Purchase History):** Melihat kembali apa yang biasa dibeli oleh toko tersebut agar tidak ada SKU rutin yang terlewat (Pareto Item).
+        2.  **Dapatkan Saran Order (Recommendation):** Mendapatkan daftar produk yang *belum* pernah dibeli toko tersebut, namun diprediksi akan laku berdasarkan data penjualan toko-toko lain yang serupa.
         """)
 
-        st.subheader("🤖 Bagaimana Cara Kerjanya?")
-        st.info("**Metode: Collaborative Filtering (Truncated SVD)**")
-        st.write("""
-        Bayangkan seorang sales senior yang hafal kebiasaan ribuan pelanggan. Sistem ini bekerja dengan cara serupa menggunakan matematika:
+        st.info("""
+        **🔍 Cara Kerja Sistem (Collaborative Filtering):**
+        Sistem ini menggunakan algoritma cerdas yang membandingkan profil belanja satu toko dengan ribuan toko lain.
         
-        1.  **Mempelajari Pola:** Sistem melihat riwayat transaksi. Jika Toko A membeli *Susu Coklat*, *Roti*, dan *Selai*, dan Toko B membeli *Susu Coklat* dan *Roti*...
-        2.  **Mencari Kemiripan:** Sistem mendeteksi bahwa Toko A dan Toko B memiliki selera yang mirip.
-        3.  **Memberi Saran:** Sistem akan merekomendasikan *Selai* kepada Toko B, karena Toko A (yang mirip) sudah membelinya.
-        
-        Teknik ini disebut **Matrix Factorization**, yang mampu menemukan hubungan tersembunyi (*latent features*) antar produk dan pelanggan.
+        *Contoh:* Jika **Toko A** dan **Toko B** memiliki kemiripan pola belanja, namun Toko B belum membeli *Produk Baru X* yang laris di Toko A, maka sistem akan menyarankan Sales untuk menawarkan *Produk X* tersebut ke Toko B.
         """)
 
     with col_info2:
-        st.warning("💡 Manfaat untuk Sales")
+        st.success("💡 Target Bisnis")
         st.markdown("""
-        * **Personalisasi:** Penawaran sesuai profil toko/customer.
-        * **Efisiensi:** Tidak perlu cek manual history satu per satu.
-        * **Discovery:** Menemukan produk yang mungkin terlupakan oleh customer tapi potensial laku.
+        * **Meningkatkan SKU Aktif:** Menambah variasi produk yang dijual di outlet.
+        * **Cross-Selling:** Menawarkan produk komplementer yang relevan.
+        * **Efisiensi Kunjungan:** Sales memiliki bahan percakapan berbasis data saat negosiasi dengan pemilik toko.
         """)
         
         st.markdown("---")
-        st.markdown("##### Siap mencoba?")
-        st.write("Klik tombol di bawah atau pilih menu 'Simulasi' di samping.")
-        if st.button("Mulai Simulasi Sekarang 🚀", type="primary", use_container_width=True):
+        st.markdown("##### Mulai Kunjungan?")
+        st.write("Klik tombol di bawah untuk masuk ke menu simulasi outlet.")
+        if st.button("Mulai Analisis Outlet 🚀", type="primary", use_container_width=True):
             go_to_simulation()
             st.rerun()
 
@@ -145,48 +144,45 @@ elif st.session_state.page == "simulation":
     
     # --- SIDEBAR CONTROLS ---
     st.sidebar.divider()
-    st.sidebar.header("⚙️ Konfigurasi")
+    st.sidebar.header("⚙️ Filter Outlet")
     
     # 1. Select User
     available_users = predicted_ratings_df.index.unique().tolist()
     selected_user_id = st.sidebar.selectbox(
-        "1. Pilih Customer ID:", 
+        "1. Pilih Kode Outlet / Customer ID:", 
         available_users,
-        help="Ketik atau pilih ID Pelanggan dari daftar."
+        help="Masukkan kode outlet yang sedang dikunjungi."
     )
 
     # 2. Select Num Recs
     n_recs = st.sidebar.selectbox(
-        "2. Jumlah Rekomendasi:",
+        "2. Jumlah Saran Order (SKU):",
         [5, 10, 15, 20, 25],
-        index=1
+        index=1,
+        help="Berapa banyak produk rekomendasi yang ingin ditampilkan."
     )
     
     # --- MAIN CONTENT ---
-    st.title("🚀 Simulasi Rekomendasi")
+    st.title("📋 Cek Toko & Rekomendasi")
     
-    # --- USER GUIDE (PANDUAN PENGGUNAAN) ---
-    with st.expander("📖 Panduan Penggunaan (User Guide)", expanded=True):
+    # --- USER GUIDE (PANDUAN VISUAL) ---
+    with st.expander("📖 Panduan Penggunaan Sales (Klik untuk menutup)", expanded=True):
         col_guide1, col_guide2 = st.columns(2)
         with col_guide1:
             st.markdown("""
-            **Langkah 1: Pilih Customer**
-            👈 Lihat menu di sebelah kiri (Sidebar).
-            * Cari ID Customer pada kolom **"Pilih Customer ID"**.
-            * Ini adalah target customer yang ingin Anda analisis.
+            **Langkah 1: Pilih Outlet**
+            👈 Pada menu kiri, masukkan **Kode Outlet** (Customer ID) yang sedang Anda kunjungi.
             """)
         with col_guide2:
             st.markdown("""
-            **Langkah 2: Tentukan Jumlah**
-            👈 Lihat menu di sebelah kiri.
-            * Gunakan **"Jumlah Rekomendasi"** untuk mengatur berapa banyak produk yang ingin ditampilkan (Top 5, 10, dst).
+            **Langkah 2: Generate Data**
+            Klik tombol **'Tampilkan Analisis Outlet'** di bawah ini untuk melihat History Belanja & Saran Order.
             """)
-        st.caption("Setelah memilih, klik tombol 'Generate Recommendations' di bawah ini untuk melihat hasil.")
 
-    st.markdown(f"### Analisis untuk Customer ID: `{selected_user_id}`")
+    st.markdown(f"### Outlet yang Sedang Dianalisis: `{selected_user_id}`")
 
     # Tombol Eksekusi
-    if st.button("Generate Recommendations", type="primary"):
+    if st.button("Tampilkan Analisis Outlet", type="primary"):
         
         # LOGIKA SVD
         def get_svd_recommendations(customer_id, n=10):
@@ -205,9 +201,9 @@ elif st.session_state.page == "simulation":
         st.markdown("---")
         col_m1, col_m2 = st.columns(2)
         with col_m1:
-            st.metric("Total Produk Pernah Dibeli", f"{len(user_history_mids)} Item")
+            st.metric("Total SKU Pernah Order", f"{len(user_history_mids)} Item")
         with col_m2:
-            st.metric("Rekomendasi Dihasilkan", f"{len(recs_mids)} Item")
+            st.metric("Potensi SKU Baru (Rekomendasi)", f"{len(recs_mids)} Item")
         st.markdown("---")
 
         # --- TAMPILAN TABEL ---
@@ -215,8 +211,8 @@ elif st.session_state.page == "simulation":
 
         # TABEL KIRI: HISTORY
         with col_left:
-            st.subheader("📜 Riwayat Pembelian (Actual)")
-            st.caption("Barang yang **sudah pernah** dibeli oleh toko ini sebelumnya.")
+            st.subheader("📦 History Belanja (Rutin)")
+            st.caption("Daftar barang yang **sudah biasa** dibeli oleh toko ini. Pastikan stok aman.")
             
             if user_history_mids:
                 history_df = pd.DataFrame({'mid': user_history_mids})
@@ -227,20 +223,20 @@ elif st.session_state.page == "simulation":
                 
                 # Rename & Masking
                 display_df = history_display[['mid', 'mid_desc', 'desc2']].rename(columns={
-                    'mid': 'Product ID',
+                    'mid': 'Kode Produk',
                     'mid_desc': 'Nama Produk',
-                    'desc2': 'Kategori/Detail'
+                    'desc2': 'Kategori'
                 })
                 display_df['Nama Produk'] = display_df['Nama Produk'].apply(mask_product_name)
 
                 st.dataframe(display_df, use_container_width=True, hide_index=True, height=500)
             else:
-                st.info("User ini tidak memiliki riwayat transaksi di dataset.")
+                st.info("Outlet ini belum memiliki riwayat transaksi (New Outlet).")
 
         # TABEL KANAN: REKOMENDASI
         with col_right:
-            st.subheader(f"✨ Top {len(recs_mids)} Rekomendasi (Prediction)")
-            st.caption("Barang yang **diprediksi akan disukai** berdasarkan pola kemiripan.")
+            st.subheader(f"✨ Saran Order Baru (Cross-Sell)")
+            st.caption("Barang ini **belum pernah dibeli**, tapi diprediksi **LAKU** di toko ini. Tawarkan ini!")
             
             if recs_mids:
                 recs_df = pd.DataFrame({'mid': recs_mids})
@@ -251,15 +247,15 @@ elif st.session_state.page == "simulation":
                 
                 # Rename & Masking
                 display_recs = recs_display[['mid', 'mid_desc', 'desc2']].rename(columns={
-                    'mid': 'Product ID',
+                    'mid': 'Kode Produk',
                     'mid_desc': 'Nama Produk',
-                    'desc2': 'Kategori/Detail'
+                    'desc2': 'Kategori'
                 })
                 display_recs['Nama Produk'] = display_recs['Nama Produk'].apply(mask_product_name)
 
                 st.dataframe(display_recs, use_container_width=True, hide_index=True, height=500)
             else:
-                st.warning("Cold Start: Sistem belum memiliki cukup data untuk memberikan rekomendasi pada user ini.")
+                st.warning("Data belum cukup untuk memberikan rekomendasi spesifik pada outlet ini.")
 
     else:
-        st.info("👈 Silakan atur konfigurasi di sidebar kiri, lalu klik tombol **'Generate Recommendations'**.")
+        st.info("👈 Silakan pilih Kode Outlet di menu kiri, lalu klik tombol **'Tampilkan Analisis Outlet'**.")
