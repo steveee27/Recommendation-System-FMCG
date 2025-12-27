@@ -134,16 +134,16 @@ if st.session_state.page == "documentation":
         st.markdown("""
         Pendekatan ini berfokus pada **pola interaksi historis**, bukan pada atribut fisik produk.
         
-        * **User:** Customer ID (Outlet/Toko)
-        * **Item:** Product ID (SKU)
+        * **User:** Customer ID
+        * **Item:** Material ID (SKU)
         * **Interaksi:** Data Transaksi Pembelian
         """)
     with col_d2:
         st.markdown("""
         **Analogi:**
-        Jika **Toko A** membeli produk [X, Y, Z] dan **Toko B** membeli produk [X, Y]...
+        Jika **Customer A** membeli produk [X, Y, Z] dan **Customer B** membeli produk [X, Y]...
         
-        Sistem mengidentifikasi bahwa Toko B memiliki kemiripan profil dengan Toko A. Oleh karena itu, sistem akan merekomendasikan produk **Z** kepada Toko B, karena produk tersebut belum dibeli namun relevan dengan profilnya.
+        Sistem mengidentifikasi bahwa Customer B memiliki kemiripan profil dengan Customer A. Oleh karena itu, sistem akan merekomendasikan produk **Z** kepada Customer B, karena produk tersebut belum dibeli namun relevan dengan profilnya.
         """)
 
     st.divider()
@@ -236,9 +236,9 @@ elif st.session_state.page == "simulation":
     with st.expander("📖 Panduan Penggunaan Aplikasi", expanded=True):
         col_g1, col_g2, col_g3 = st.columns(3)
         with col_g1:
-            st.markdown("**Langkah 1:**\n👉 Pilih **Customer ID** pada menu di sebelah kiri (Sidebar).")
+            st.markdown("**Langkah 1:**\n👉 Pilih **Customer ID** pada menu di sebelah kiri.")
         with col_g2:
-            st.markdown("**Langkah 2:**\n👉 Tentukan **Jumlah Rekomendasi** (misal: 10 item).")
+            st.markdown("**Langkah 2:**\n👉 Tentukan *Pilih **Jumlah Rekomendasi** pada menu sebelah kiri.")
         with col_g3:
             st.markdown("**Langkah 3:**\n👉 Klik tombol **'Tampilkan Analisis'** di bawah ini.")
 
@@ -271,9 +271,9 @@ elif st.session_state.page == "simulation":
         # --- METRICS DISPLAY ---
         col_m1, col_m2 = st.columns(2)
         with col_m1:
-            st.metric("Total SKU Pernah Order", f"{len(user_history_mids)} Item")
+            st.metric("Total SKU yang Pernah Diorder", f"{len(user_history_mids)} Item")
         with col_m2:
-            st.metric("Saran Produk Baru", f"{len(recs_mids)} Item")
+            st.metric("Jumlah Rekomendasi Produk", f"{len(recs_mids)} Item")
         
         st.markdown("---")
 
@@ -283,7 +283,7 @@ elif st.session_state.page == "simulation":
         # LEFT COLUMN: HISTORY TABLE
         with col_left:
             st.subheader("📦 Riwayat Belanja (History)")
-            st.caption("Daftar produk yang **sudah biasa** dibeli oleh Customer ini.")
+            st.caption("Daftar produk yang **sudah pernah** dibeli oleh Customer ini.")
             
             if user_history_mids:
                 # Create DataFrame for history
@@ -309,7 +309,7 @@ elif st.session_state.page == "simulation":
         # RIGHT COLUMN: RECOMMENDATION TABLE
         with col_right:
             st.subheader(f"✨ Saran Order (Rekomendasi)")
-            st.caption("Produk yang **belum pernah dibeli**, namun memiliki **relevansi tinggi**.")
+            st.caption("Daftar produk yang **direkomendasikan** dan memiliki **relevansi tinggi**.")
             
             if recs_mids:
                 # Create DataFrame for recommendations
