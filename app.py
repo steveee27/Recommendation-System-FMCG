@@ -3,7 +3,9 @@ import pandas as pd
 import re
 import numpy as np
 
-# --- 1. CONFIGURATION & UTILS ---
+# ==========================================
+# 1. CONFIGURATION & UTILITY FUNCTIONS
+# ==========================================
 st.set_page_config(
     page_title="FMCG Recommender System",
     page_icon="🛍️",
@@ -13,7 +15,15 @@ st.set_page_config(
 
 def mask_product_name(name):
     """
-    Mask product name: take first letter of each word until a number appears.
+    Masks the product name for privacy/display purposes.
+    It takes the first letter of each word until a numeric character is encountered.
+    Words containing numbers and subsequent words remain unchanged.
+    
+    Args:
+        name (str): Original product name.
+    
+    Returns:
+        str: Masked product name.
     """
     words = name.split()
     masked_letters = []
@@ -22,10 +32,12 @@ def mask_product_name(name):
     
     for w in words:
         if not numeric_found:
+            # Check if word contains a digit
             if re.search(r'\d', w):  
                 numeric_found = True
                 remaining_words.append(w)
             else:
+                # Take only the first letter
                 masked_letters.append(w[0]) 
         else:
             remaining_words.append(w)
@@ -37,21 +49,28 @@ def mask_product_name(name):
     else:
         return masked_part
 
-# --- 2. DATA LOADING FUNCTION ---
+# ==========================================
+# 2. DATA LOADING FUNCTION
+# ==========================================
 @st.cache_data
 def load_data():
     """
-    Loads data chunks and merges them back.
+    Loads data chunks from the 'app_data' directory and merges them back 
+    into full pandas DataFrames.
+    
+    Returns:
+        tuple: (predictions_df, products_df, history_df)
     """
-    # 1. LOAD PREDICTED RATINGS (6 Parts)
+    # 1. LOAD PREDICTED RATINGS (Split into 6 parts)
     rating_parts = []
     for i in range(1, 7):
         filename = f'app_data/predicted_ratings_part{i}.pkl'
+        # compression='gzip' is required as data was saved with this compression
         part = pd.read_pickle(filename, compression='gzip')
         rating_parts.append(part)
     predictions = pd.concat(rating_parts)
 
-    # 2. LOAD USER HISTORY (Up to 6 parts safe check)
+    # 2. LOAD USER HISTORY (Check up to 6 parts)
     history_parts = []
     for i in range(1, 7):
         filename = f'app_data/user_history_part{i}.pkl'
@@ -59,15 +78,15 @@ def load_data():
             part = pd.read_pickle(filename, compression='gzip')
             history_parts.append(part)
         except FileNotFoundError:
-            continue
+            continue # Skip if file part doesn't exist
     history = pd.concat(history_parts)
 
-    # 3. LOAD METADATA
+    # 3. LOAD PRODUCT METADATA (Single file)
     products = pd.read_pickle('app_data/product_metadata.pkl')
 
     return predictions, products, history
 
-# Load data globally
+# Execute load_data globally to ensure data is available on app start
 try:
     with st.spinner('Menyiapkan database sistem...'):
         predicted_ratings_df, full_product, order_cust = load_data()
@@ -76,171 +95,180 @@ except Exception as e:
     st.stop()
 
 
-# --- 3. SESSION STATE & NAVIGATION ---
+# ==========================================
+# 3. SESSION STATE & NAVIGATION LOGIC
+# ==========================================
+# Initialize session state for page navigation if it doesn't exist
 if 'page' not in st.session_state:
     st.session_state.page = "simulation"
 
 def go_to_docs():
+    """Switch state to documentation page."""
     st.session_state.page = "documentation"
 
 def go_to_simulation():
+    """Switch state to simulation page."""
     st.session_state.page = "simulation"
 
 
 # ==========================================
-# PAGE 1: DOCUMENTATION (CARA KERJA MODEL)
+# PAGE 1: DOCUMENTATION (HOW IT WORKS)
 # ==========================================
 if st.session_state.page == "documentation":
     
+    # Back button to return to the main app
     st.button("⬅️ Kembali ke Simulasi", on_click=go_to_simulation)
     
     st.title("📖 Cara Kerja Model & Aplikasi")
-    st.markdown("Dokumentasi teknis tentang bagaimana sistem menghasilkan rekomendasi produk.")
+    st.markdown("Dokumentasi teknis mengenai metodologi sistem rekomendasi yang digunakan.")
     st.divider()
 
-    # --- BAGIAN 1: KONSEP DASAR ---
+    # --- SECTION 1: CORE CONCEPT ---
     st.header("1. Konsep Utama: Collaborative Filtering")
     st.info("""
-    **Prinsip Dasar:** "Customer yang menyukai hal yang sama di masa lalu, cenderung menyukai hal yang sama di masa depan."
+    **Prinsip Dasar:** Sistem memprediksi preferensi customer berdasarkan kemiripan pola transaksi dengan customer lain.
     """)
     
     col_d1, col_d2 = st.columns([1, 1])
     with col_d1:
         st.markdown("""
-        Sistem ini tidak melihat *isi* produk (misal: rasa, warna, kemasan), melainkan melihat **pola interaksi/transaksi**.
+        Pendekatan ini berfokus pada **pola interaksi historis**, bukan pada atribut fisik produk.
         
-        * **User:** Customer ID (Toko/Warung)
+        * **User:** Customer ID (Outlet/Toko)
         * **Item:** Product ID (SKU)
-        * **Interaksi:** Riwayat Pembelian
+        * **Interaksi:** Data Transaksi Pembelian
         """)
     with col_d2:
         st.markdown("""
-        **Analogi Sederhana:**
-        Jika **Toko A** membeli [Susu, Kopi, Gula] dan **Toko B** membeli [Susu, Kopi]...
+        **Analogi:**
+        Jika **Toko A** membeli produk [X, Y, Z] dan **Toko B** membeli produk [X, Y]...
         
-        Maka sistem akan berpikir: *"Toko B mirip dengan Toko A. Karena Toko A membeli Gula, maka Toko B kemungkinan besar juga butuh Gula."*
+        Sistem mengidentifikasi bahwa Toko B memiliki kemiripan profil dengan Toko A. Oleh karena itu, sistem akan merekomendasikan produk **Z** kepada Toko B, karena produk tersebut belum dibeli namun relevan dengan profilnya.
         """)
 
     st.divider()
 
-    # --- BAGIAN 2: ALGORITMA SVD ---
+    # --- SECTION 2: ALGORITHM DETAILS ---
     st.header("2. Algoritma: Truncated SVD")
     st.markdown("""
-    Kami menggunakan metode **Matrix Factorization** dengan algoritma *Truncated Singular Value Decomposition (SVD)*. 
-    Berikut adalah tahapan teknis yang terjadi di balik layar (berdasarkan kode training model):
+    Model ini dibangun menggunakan metode **Matrix Factorization** dengan algoritma *Truncated Singular Value Decomposition (SVD)*. 
+    Berikut adalah tahapan pemrosesan data:
     """)
 
-    # Step 1
-    st.subheader("Langkah 1: Pembuatan User-Item Matrix")
+    # Step 1: Matrix Creation
+    st.subheader("Langkah 1: Penyusunan User-Item Matrix")
     st.code("matrix_train = matrix[matrix['customer_id'].isin(train_final['customer_id'].unique())]", language="python")
-    st.write("Sistem menyusun data transaksi menjadi tabel raksasa (Matriks) dimana baris adalah **Customer** dan kolom adalah **Produk**. Isi tabel adalah data interaksi.")
+    st.write("Data transaksi dikonversi menjadi sebuah tabel matriks besar (User-Item Matrix) di mana baris merepresentasikan **Customer** dan kolom merepresentasikan **Produk**.")
 
-    # Step 2
+    # Step 2: Decomposition
     st.subheader("Langkah 2: Reduksi Dimensi (Decomposition)")
     st.code("svd = TruncatedSVD(n_components=50, random_state=42)", language="python")
     st.write("""
-    Matriks awal sangat besar dan bolong-bolong (sparse). SVD memecah dan memampatkan matriks tersebut menjadi **50 Komponen Tersembunyi (Latent Features)** (`n_components=50`).
+    Matriks awal memiliki dimensi yang sangat besar dan bersifat *sparse* (banyak nilai kosong karena satu customer tidak mungkin membeli semua produk).
     
-    * **Apa itu Komponen Tersembunyi?** Ini adalah pola abstrak yang ditemukan komputer. 
-    * *Contoh:* Komponen 1 mungkin mewakili "Produk Sarapan", Komponen 2 mewakili "Minuman Dingin", dst.
+    SVD memproses matriks ini dengan memecahnya menjadi **50 Komponen Laten (Latent Features)**. Komponen ini merepresentasikan pola tersembunyi atau karakteristik abstrak dari interaksi user dan item.
     """)
-    
 
-    # Step 3
-    st.subheader("Langkah 3: Prediksi Skor (Reconstruction)")
+    # Step 3: Reconstruction
+    st.subheader("Langkah 3: Kalkulasi Skor Prediksi")
     st.code("predicted_ratings = np.dot(matrix_decomposed, svd.components_)", language="python")
     st.write("""
-    Sistem mengalikan kembali komponen-komponen tersebut untuk menghasilkan **Matriks Prediksi**.
+    Melalui perkalian matriks hasil dekomposisi, sistem menghasilkan **Matriks Prediksi**.
     
-    Hasilnya adalah skor (rating) untuk **SETIAP** produk bagi **SETIAP** customer. Skor inilah yang menentukan seberapa besar kemungkinan customer akan membeli produk tersebut.
+    Outputnya adalah nilai skor (rating) untuk setiap pasangan Customer dan Produk. Skor ini mengindikasikan tingkat probabilitas atau relevansi produk tersebut bagi customer tertentu.
     """)
 
     st.divider()
 
-    # --- BAGIAN 3: ALUR APLIKASI ---
-    st.header("3. Bagaimana Rekomendasi Muncul di Layar Sales?")
-    st.markdown("Saat Anda menekan tombol **'Tampilkan Analisis'**, inilah yang terjadi:")
+    # --- SECTION 3: INFERENCE FLOW ---
+    st.header("3. Alur Proses Rekomendasi pada Aplikasi")
+    st.markdown("Saat pengguna meminta rekomendasi, sistem melakukan langkah-langkah berikut secara *real-time*:")
     
     st.success("""
-    1.  **Lookup:** Sistem mencari baris data milik Customer ID yang dipilih dalam tabel `predicted_ratings`.
-    2.  **Sorting:** Sistem mengurutkan ribuan produk berdasarkan **skor prediksi tertinggi** ke terendah.
-    3.  **Filtering:** Sistem mengambil Top-N produk teratas (misal: 10 produk terbaik).
-    4.  **Display:** Kode Produk (ID) diterjemahkan menjadi Nama Produk dan ditampilkan ke tabel.
+    1.  **Lookup:** Mengidentifikasi data vektor milik Customer ID yang dipilih.
+    2.  **Sorting:** Mengurutkan seluruh produk berdasarkan nilai prediksi tertinggi (High Probability).
+    3.  **Filtering:** Mengambil sejumlah *N* produk teratas sesuai filter yang diinginkan.
+    4.  **Serving:** Menampilkan hasil rekomendasi dalam bentuk tabel interaktif.
     """)
     
     st.markdown("<br><br>", unsafe_allow_html=True)
-    st.button("⬅️ Paham, Kembali ke Aplikasi", on_click=go_to_simulation, type="primary")
+    st.button("⬅️ Mengerti, Kembali ke Aplikasi", on_click=go_to_simulation, type="primary")
 
 
 # ==========================================
-# PAGE 2: SIMULATION (APLIKASI UTAMA)
+# PAGE 2: SIMULATION (MAIN APP)
 # ==========================================
 elif st.session_state.page == "simulation":
 
-    # --- SIDEBAR CONTROLS ---
+    # --- SIDEBAR: FILTER CONTROLS ---
     st.sidebar.header("⚙️ Filter Customer")
 
-    # 1. Select Customer
+    # 1. Customer Selection
     available_users = predicted_ratings_df.index.unique().tolist()
     selected_user_id = st.sidebar.selectbox(
         "1. Pilih Customer ID:", 
         available_users,
-        help="Masukkan atau cari ID Customer yang ingin dianalisis."
+        help="Cari atau pilih ID Customer dari daftar."
     )
 
-    # 2. Select Num Recs
+    # 2. Number of Recommendations Selection
     n_recs = st.sidebar.selectbox(
-        "2. Filter Jumlah Saran Order:",
+        "2. Jumlah Rekomendasi:",
         [5, 10, 15, 20, 25],
         index=1,
-        help="Tentukan berapa banyak produk rekomendasi yang ingin ditampilkan."
+        help="Tentukan jumlah produk yang ingin ditampilkan."
     )
 
     st.sidebar.divider()
     
-    # NAVIGATION TO DOCS
+    # --- SIDEBAR: LINK TO DOCS ---
     st.sidebar.markdown("### ℹ️ Informasi Sistem")
-    st.sidebar.write("Ingin tahu bagaimana AI menentukan rekomendasi ini?")
+    st.sidebar.write("Pelajari metodologi di balik rekomendasi ini.")
     if st.sidebar.button("Pelajari Cara Kerja Model"):
         go_to_docs()
         st.rerun()
 
 
-    # --- MAIN CONTENT ---
+    # --- MAIN CONTENT AREA ---
     st.title("Sistem Rekomendasi Produk FMCG")
 
-    # --- USER GUIDE (PANDUAN) ---
+    # --- USER GUIDE EXPANDER ---
     with st.expander("📖 Panduan Penggunaan Aplikasi", expanded=True):
         col_g1, col_g2, col_g3 = st.columns(3)
         with col_g1:
-            st.markdown("**Langkah 1:**\n👉 Pilih **Customer ID** pada menu sebelah kiri (Sidebar).")
+            st.markdown("**Langkah 1:**\n👉 Pilih **Customer ID** pada menu di sebelah kiri (Sidebar).")
         with col_g2:
-            st.markdown("**Langkah 2:**\n👉 Tentukan **Jumlah Saran Order** (misal: 10 item).")
+            st.markdown("**Langkah 2:**\n👉 Tentukan **Jumlah Rekomendasi** (misal: 10 item).")
         with col_g3:
             st.markdown("**Langkah 3:**\n👉 Klik tombol **'Tampilkan Analisis'** di bawah ini.")
 
     st.divider()
 
-    # Header Status
+    # Selected Customer Status
     st.markdown(f"### Analisis untuk Customer ID: `{selected_user_id}`")
 
-    # TOMBOL EKSEKUSI
+    # EXECUTION BUTTON
     if st.button("Tampilkan Analisis & Rekomendasi", type="primary"):
         
-        # --- LOGIKA SVD ---
+        # --- INFERENCE LOGIC ---
         def get_svd_recommendations(customer_id, n=10):
+            """
+            Retrieves top N recommendations for a specific customer based on SVD predictions.
+            """
             if customer_id not in predicted_ratings_df.index: 
                 return []
+            # Sort predictions descending
             sorted_preds = predicted_ratings_df.loc[customer_id].sort_values(ascending=False)
+            # Return Top N indices
             return [str(mid) for mid in sorted_preds.head(n).index]
 
-        # 1. Ambil Data History
+        # 1. Fetch User History
         user_history_mids = order_cust[order_cust['customer_id'] == selected_user_id]['mid'].unique().tolist()
         
-        # 2. Ambil Rekomendasi
+        # 2. Fetch Recommendations
         recs_mids = get_svd_recommendations(selected_user_id, n=n_recs)
 
-        # --- TAMPILAN METRICS ---
+        # --- METRICS DISPLAY ---
         col_m1, col_m2 = st.columns(2)
         with col_m1:
             st.metric("Total SKU Pernah Order", f"{len(user_history_mids)} Item")
@@ -249,22 +277,23 @@ elif st.session_state.page == "simulation":
         
         st.markdown("---")
 
-        # --- TAMPILAN TABEL ---
+        # --- DATAFRAME DISPLAY ---
         col_left, col_right = st.columns(2)
 
-        # TABEL KIRI: HISTORY
+        # LEFT COLUMN: HISTORY TABLE
         with col_left:
             st.subheader("📦 Riwayat Belanja (History)")
-            st.caption("Daftar barang yang **sudah biasa** dibeli oleh Customer ini.")
+            st.caption("Daftar produk yang **sudah biasa** dibeli oleh Customer ini.")
             
             if user_history_mids:
+                # Create DataFrame for history
                 history_df = pd.DataFrame({'mid': user_history_mids})
                 history_df['mid'] = history_df['mid'].astype(str)
                 
-                # Merge info produk
+                # Merge with metadata
                 history_display = history_df.merge(full_product, on='mid', how='left')
                 
-                # Rename & Masking
+                # Rename columns and apply masking
                 display_df = history_display[['mid', 'mid_desc', 'desc2']].rename(columns={
                     'mid': 'Kode Produk',
                     'mid_desc': 'Nama Produk',
@@ -272,23 +301,25 @@ elif st.session_state.page == "simulation":
                 })
                 display_df['Nama Produk'] = display_df['Nama Produk'].apply(mask_product_name)
 
+                # Render Table
                 st.dataframe(display_df, use_container_width=True, hide_index=True, height=500)
             else:
                 st.info("Customer ini belum memiliki riwayat transaksi.")
 
-        # TABEL KANAN: REKOMENDASI
+        # RIGHT COLUMN: RECOMMENDATION TABLE
         with col_right:
             st.subheader(f"✨ Saran Order (Rekomendasi)")
-            st.caption("Barang yang **belum pernah dibeli**, tapi diprediksi **relevan** untuk Customer ini.")
+            st.caption("Produk yang **belum pernah dibeli**, namun memiliki **relevansi tinggi**.")
             
             if recs_mids:
+                # Create DataFrame for recommendations
                 recs_df = pd.DataFrame({'mid': recs_mids})
                 recs_df['mid'] = recs_df['mid'].astype(str)
                 
-                # Merge info produk
+                # Merge with metadata
                 recs_display = recs_df.merge(full_product, on='mid', how='left')
                 
-                # Rename & Masking
+                # Rename columns and apply masking
                 display_recs = recs_display[['mid', 'mid_desc', 'desc2']].rename(columns={
                     'mid': 'Kode Produk',
                     'mid_desc': 'Nama Produk',
@@ -296,10 +327,11 @@ elif st.session_state.page == "simulation":
                 })
                 display_recs['Nama Produk'] = display_recs['Nama Produk'].apply(mask_product_name)
 
+                # Render Table
                 st.dataframe(display_recs, use_container_width=True, hide_index=True, height=500)
             else:
                 st.warning("Data belum cukup untuk memberikan rekomendasi spesifik.")
 
     else:
-        # State awal sebelum tombol ditekan
+        # Initial State (Before button click)
         st.info("👋 Silakan ikuti panduan di atas untuk memulai analisis.")
