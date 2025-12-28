@@ -238,7 +238,7 @@ elif st.session_state.page == "simulation":
         with col_g1:
             st.markdown("**Langkah 1:**\n👉 Pilih **Customer ID** pada menu di sebelah kiri.")
         with col_g2:
-            st.markdown("**Langkah 2:**\n👉 Tentukan *Pilih **Jumlah Rekomendasi** pada menu sebelah kiri.")
+            st.markdown("**Langkah 2:**\n👉 Pilih **Jumlah Rekomendasi** pada menu sebelah kiri.")
         with col_g3:
             st.markdown("**Langkah 3:**\n👉 Klik tombol **'Tampilkan Analisis'** di bawah ini.")
 
