@@ -117,7 +117,7 @@ if st.session_state.page == "documentation":
     st.divider()
 
     # --- TAB 1: KONSEP TEORITIS ---
-    st.header("1. Konsep Dasar: Neural Collaborative Filtering")
+    st.header("1. Konsep Dasar")
     
     col1, col2 = st.columns([1.5, 1])
     
