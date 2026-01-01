@@ -59,6 +59,7 @@ def load_data():
         maps = pickle.load(f)
         
     # Buat dictionary agar pencarian cepat: ID -> Index Baris
+    # Pastikan ID dikonversi ke string agar konsisten dengan input user
     user_map = {str(uid): i for i, uid in enumerate(maps['user_ids'])}
     
     # Buat dictionary kebalikannya untuk Item: Index Baris -> ID
@@ -137,7 +138,7 @@ if st.session_state.page == "documentation":
         
         Sistem kemudian memetakan mereka ke dalam "Peta Kepribadian". Jika posisi mereka berdekatan di peta, berarti mereka **cocok** (skor tinggi).
         """)
-    
+    st.markdown("")
 
     st.divider()
 
@@ -165,7 +166,7 @@ if st.session_state.page == "documentation":
     st.write("""
     Tujuan model saat training adalah memaksimalkan skor (Dot Product) untuk pasangan user-item yang benar-benar terjadi (transaksi positif) dan meminimalkannya untuk yang tidak pernah terjadi.
     """)
-    
+    st.markdown("")
 
     # Step 3: Output
     st.subheader("Langkah 3: Output Embeddings")
@@ -269,12 +270,29 @@ elif st.session_state.page == "simulation":
             
             # 4. Ambil Top-N Index Terbaik
             # np.argsort mengurutkan dari kecil ke besar, ambil n terakhir, lalu balik urutannya
-            top_indices = np.argsort(scores)[-n:][::-1]
+            # Kita ambil lebih banyak dulu (n + 50) untuk jaga-jaga jika ada yg difilter
+            top_indices_candidates = np.argsort(scores)[-(n + 100):][::-1]
             
-            # 5. Translate Index ke Product ID (mid)
-            recommended_mids = [item_inv_map[i] for i in top_indices]
+            # 5. Filter & Mapping
+            # (Opsional: Filter barang yang sudah dibeli jika ingin 'Discovery' murni)
+            already_bought = order_cust[order_cust['customer_id'] == customer_id]['mid'].unique().tolist()
+            already_bought_set = set([str(x) for x in already_bought])
             
-            return recommended_mids
+            final_recs = []
+            for idx in top_indices_candidates:
+                mid = item_inv_map[idx]
+                
+                # JIKA ingin menampilkan hanya barang baru (Discovery):
+                if mid not in already_bought_set:
+                    final_recs.append(mid)
+                
+                # JIKA ingin menampilkan barang rutin + baru (General):
+                # final_recs.append(mid) 
+                
+                if len(final_recs) >= n:
+                    break
+            
+            return final_recs
 
         # 1. Fetch User History
         user_history_mids = order_cust[order_cust['customer_id'] == selected_user_id]['mid'].unique().tolist()
