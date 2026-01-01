@@ -41,13 +41,13 @@ def mask_product_name(name):
         return masked_part
 
 # ==========================================
-# 2. DATA LOADING FUNCTION (TWO-TOWER)
+# 2. DATA LOADING FUNCTION (FIXED)
 # ==========================================
 @st.cache_data
 def load_data():
     """
     Loads Two-Tower artifacts: Embeddings (.npy) and ID Mappings (.pkl).
-    Also loads user history and product metadata.
+    Also loads user history and product metadata (Single Files).
     """
     # 1. LOAD EMBEDDINGS (Vektor)
     # File .npy sangat cepat dimuat dan ringan
@@ -65,17 +65,9 @@ def load_data():
     # Buat dictionary kebalikannya untuk Item: Index Baris -> ID
     item_inv_map = {i: str(mid) for i, mid in enumerate(maps['item_ids'])}
 
-    # 3. LOAD USER HISTORY (Check up to 6 parts)
-    history_parts = []
-    for i in range(1, 7):
-        filename = f'app_data/user_history_part{i}.pkl'
-        try:
-            # compression='gzip' is required as data was saved with this compression
-            part = pd.read_pickle(filename, compression='gzip')
-            history_parts.append(part)
-        except FileNotFoundError:
-            continue
-    history = pd.concat(history_parts)
+    # 3. LOAD USER HISTORY (SINGLE FILE - FIXED)
+    # Sesuai dengan kode save Anda yang tidak memecah file
+    history = pd.read_pickle('app_data/user_history.pkl', compression='gzip')
 
     # 4. LOAD PRODUCT METADATA (Single file)
     products = pd.read_pickle('app_data/product_metadata.pkl')
@@ -274,8 +266,9 @@ elif st.session_state.page == "simulation":
             top_indices_candidates = np.argsort(scores)[-(n + 100):][::-1]
             
             # 5. Filter & Mapping
-            # (Opsional: Filter barang yang sudah dibeli jika ingin 'Discovery' murni)
-            already_bought = order_cust[order_cust['customer_id'] == customer_id]['mid'].unique().tolist()
+            # Filter history untuk menampilkan 'Discovery' (Barang baru saja)
+            # Pastikan kolom customer_id di order_cust tipe-nya string agar match
+            already_bought = order_cust[order_cust['customer_id'].astype(str) == str(customer_id)]['mid'].unique().tolist()
             already_bought_set = set([str(x) for x in already_bought])
             
             final_recs = []
@@ -286,16 +279,14 @@ elif st.session_state.page == "simulation":
                 if mid not in already_bought_set:
                     final_recs.append(mid)
                 
-                # JIKA ingin menampilkan barang rutin + baru (General):
-                # final_recs.append(mid) 
-                
                 if len(final_recs) >= n:
                     break
             
             return final_recs
 
         # 1. Fetch User History
-        user_history_mids = order_cust[order_cust['customer_id'] == selected_user_id]['mid'].unique().tolist()
+        # Pastikan tipe data sama (string)
+        user_history_mids = order_cust[order_cust['customer_id'].astype(str) == str(selected_user_id)]['mid'].unique().tolist()
         
         # 2. Fetch Recommendations (Using Two Tower Logic)
         recs_mids = get_twotower_recommendations(selected_user_id, n=n_recs)
