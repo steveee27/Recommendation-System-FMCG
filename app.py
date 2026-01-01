@@ -250,7 +250,6 @@ index.add(all_item_embeddings.astype('float32'))
         """)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.button("⬅️ Kembali ke Simulasi", on_click=go_to_simulation, key='btn_back_bottom')
 
 elif st.session_state.page == "simulation":
 
