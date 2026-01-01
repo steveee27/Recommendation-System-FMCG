@@ -108,7 +108,7 @@ if st.session_state.page == "documentation":
     
     st.title("Dokumentasi Teknis: Sistem Rekomendasi Two-Tower")
     st.markdown("""
-    **Ringkasan:** Dokumen ini menguraikan landasan teoritis, spesifikasi arsitektur *Champion Model*, 
+    **Dokumen ini menguraikan landasan teoritis, spesifikasi arsitektur terbaik, 
     dan mekanisme inferensi *high-speed retrieval* yang diimplementasikan dalam sistem rekomendasi ini.
     """)
     st.divider()
