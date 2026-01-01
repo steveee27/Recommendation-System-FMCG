@@ -238,7 +238,7 @@ index.add(all_item_embeddings.astype('float32'))
         **Tahap 3: Real-Time Retrieval**
         
         Saat simulasi dijalankan:
-        1. Data user diproses oleh *User Tower* $\rightarrow$ menghasilkan 1 vektor user.
+        1. Data user diproses oleh *User Tower* dan menghasilkan 1 vektor user.
         2. Vektor user digunakan untuk *query* ke FAISS Index.
         3. FAISS mengembalikan $K$ item dengan nilai *Inner Product* tertinggi.
         """)
