@@ -165,7 +165,7 @@ if st.session_state.page == "documentation":
             3. **Dense Layers:** Transformasi non-linear menggunakan MLP (Multi-Layer Perceptron).
             """)
             st.markdown("**Output:**")
-            st.code("Vektor Dimensi 8 (User Representation)", language="text")
+            st.code("Vektor Dimensi 32 (User Representation)", language="text")
 
         with c_item:
             st.subheader("🅱️ Item Tower")
@@ -178,7 +178,7 @@ if st.session_state.page == "documentation":
             3. **Dense Layers:** Struktur identik dengan User Tower untuk menjaga keselarasan dimensi.
             """)
             st.markdown("**Output:**")
-            st.code("Vektor Dimensi 8 (Item Representation)", language="text")
+            st.code("Vektor Dimensi 32 (Item Representation)", language="text")
 
     st.markdown("### Snippet Kode Implementasi")
     st.write("Berikut adalah potongan kode asli yang mendefinisikan struktur input hibrida (Numerik + Kategorikal):")
