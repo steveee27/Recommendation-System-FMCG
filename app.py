@@ -4,9 +4,6 @@ import re
 import numpy as np
 import pickle
 
-# ==========================================
-# 1. CONFIGURATION & UTILITY FUNCTIONS
-# ==========================================
 st.set_page_config(
     page_title="FMCG Recommender System",
     page_icon="🛍️",
@@ -40,41 +37,26 @@ def mask_product_name(name):
     else:
         return masked_part
 
-# ==========================================
-# 2. DATA LOADING FUNCTION (FIXED)
-# ==========================================
 @st.cache_data
 def load_data():
     """
     Loads Two-Tower artifacts: Embeddings (.npy) and ID Mappings (.pkl).
     Also loads user history and product metadata (Single Files).
     """
-    # 1. LOAD EMBEDDINGS (Vektor)
-    # File .npy sangat cepat dimuat dan ringan
     user_vecs = np.load('app_data/user_embeddings.npy')
     item_vecs = np.load('app_data/item_embeddings.npy')
     
-    # 2. LOAD MAPPINGS (Kamus ID)
     with open('app_data/twotower_maps.pkl', 'rb') as f:
         maps = pickle.load(f)
         
-    # Buat dictionary agar pencarian cepat: ID -> Index Baris
-    # Pastikan ID dikonversi ke string agar konsisten dengan input user
     user_map = {str(uid): i for i, uid in enumerate(maps['user_ids'])}
-    
-    # Buat dictionary kebalikannya untuk Item: Index Baris -> ID
     item_inv_map = {i: str(mid) for i, mid in enumerate(maps['item_ids'])}
 
-    # 3. LOAD USER HISTORY (SINGLE FILE - FIXED)
-    # Sesuai dengan kode save Anda yang tidak memecah file
     history = pd.read_pickle('app_data/user_history.pkl', compression='gzip')
-
-    # 4. LOAD PRODUCT METADATA (Single file)
     products = pd.read_pickle('app_data/product_metadata.pkl')
 
     return user_vecs, item_vecs, user_map, item_inv_map, products, history
 
-# Execute load_data globally
 try:
     with st.spinner('Menyiapkan database sistem (Loading Embeddings)...'):
         user_vecs, item_vecs, user_map, item_inv_map, full_product, order_cust = load_data()
@@ -82,10 +64,6 @@ except Exception as e:
     st.error(f"Gagal memuat data: {e}")
     st.stop()
 
-
-# ==========================================
-# 3. SESSION STATE & NAVIGATION LOGIC
-# ==========================================
 if 'page' not in st.session_state:
     st.session_state.page = "simulation"
 
@@ -95,15 +73,7 @@ def go_to_docs():
 def go_to_simulation():
     st.session_state.page = "simulation"
 
-
-import streamlit as st
-
-# ==========================================
-# PAGE: DOCUMENTATION (FULL ACADEMIC)
-# ==========================================
 if st.session_state.page == "documentation":
-    
-    # Tombol Navigasi
     st.button("⬅️ Kembali ke Simulasi", on_click=go_to_simulation)
     
     st.title("Dokumentasi Teknis: Sistem Rekomendasi Two-Tower")
@@ -113,7 +83,6 @@ if st.session_state.page == "documentation":
     """)
     st.divider()
 
-    # Membuat Tabs untuk struktur yang rapi
     tab1, tab2, tab3, tab4 = st.tabs([
         "📚 Landasan Teori", 
         "🏗️ Arsitektur Model", 
@@ -121,7 +90,6 @@ if st.session_state.page == "documentation":
         "🚀 Mekanisme Inferensi (FAISS)"
     ])
 
-    # --- TAB 1: LANDASAN TEORI ---
     with tab1:
         st.header("1. Konsep Dasar:")
         
@@ -153,7 +121,6 @@ if st.session_state.page == "documentation":
             ''')
             st.caption("Dimana $d$ adalah dimensi embedding akhir (8 dimensi).")
 
-    # --- TAB 2: ARSITEKTUR MODEL (CONFIG 5) ---
     with tab2:
         st.header("2. Spesifikasi Arsitektur Two Tower")
         st.write("""
@@ -161,7 +128,6 @@ if st.session_state.page == "documentation":
         antara metrik **Precision@10**, **Recall@10**, **NDCG@10**, dan **Coverage**.
         """)
 
-        # Metric Cards
         c1, c2, c3 = st.columns(3)
         with c1:
             st.metric("Embedding Dim", "32", "Latent Size")
@@ -181,7 +147,7 @@ if st.session_state.page == "documentation":
         with st.expander("🅰️ User Tower Specification", expanded=True):
             st.markdown("""
             1.  **Input Layer:** Menerima `Customer ID` (Embedding) + Fitur Numerik (Normalized) + Fitur Kategori (Embedding).
-            2.  **Concatenation:** Penggabungan seluruh fitur menjadi satu vektor densitas tinggi.
+            2.  **Concatenation:** Penggabungan seluruh fitur user menjadi satu vektor densitas tinggi.
             3.  **Dense Block:**
                 * Layer 1: 32 Neuron (ReLU) + Dropout 0.3
                 * Layer 2: 16 Neuron (ReLU) + Dropout 0.3
@@ -190,13 +156,14 @@ if st.session_state.page == "documentation":
 
         with st.expander("🅱️ Item Tower Specification", expanded=True):
             st.markdown("""
-            1.  **Input Layer:** Menerima `Material ID` (Embedding) + Fitur Numerik + Fitur Kategori.
-            2.  **Concatenation:** Penggabungan seluruh fitur produk.
-            3.  **Dense Block:** Struktur identik dengan User Tower ([32, 16], ReLU, Dropout 0.3).
-            4.  **Projection Head:** Layer Dense akhir dengan 8 Neuron (menghasilkan vektor $v$).
+            1.  **Input Layer:** Menerima `Material ID` (Embedding) + Fitur Numerik (Normalized) + Fitur Kategori (Embedding).
+            2.  **Concatenation:** Penggabungan seluruh fitur item menjadi satu vektor densitas tinggi.
+            3.  **Dense Block:**
+                * Layer 1: 32 Neuron (ReLU) + Dropout 0.3
+                * Layer 2: 16 Neuron (ReLU) + Dropout 0.3
+            4.  **Projection Head:** Layer Dense akhir dengan 8 Neuron (menghasilkan vektor $u$).
             """)
 
-    # --- TAB 3: ALGORITMA TRAINING ---
     with tab3:
         st.header("3. Mekanisme Pembelajaran (Training)")
         st.write("""
@@ -285,16 +252,10 @@ index.add(all_item_embeddings.astype('float32'))
     st.markdown("<br>", unsafe_allow_html=True)
     st.button("⬅️ Kembali ke Simulasi", on_click=go_to_simulation, key='btn_back_bottom')
 
-# ==========================================
-# PAGE 2: SIMULATION (MAIN APP)
-# ==========================================
 elif st.session_state.page == "simulation":
 
-    # --- SIDEBAR: FILTER CONTROLS ---
     st.sidebar.header("⚙️ Filter Customer")
 
-    # 1. Customer Selection
-    # Mengambil list user ID dari user_map dictionary
     available_users = list(user_map.keys())
     selected_user_id = st.sidebar.selectbox(
         "1. Pilih Customer ID:", 
@@ -302,7 +263,6 @@ elif st.session_state.page == "simulation":
         help="Cari atau pilih ID Customer dari daftar."
     )
 
-    # 2. Number of Recommendations Selection
     n_recs = st.sidebar.selectbox(
         "2. Jumlah Rekomendasi:",
         [5, 10, 15, 20, 25],
@@ -312,18 +272,14 @@ elif st.session_state.page == "simulation":
 
     st.sidebar.divider()
     
-    # --- SIDEBAR: LINK TO DOCS ---
     st.sidebar.markdown("### ℹ️ Informasi Sistem")
     st.sidebar.write("Pelajari model Two-Tower di balik aplikasi ini.")
     if st.sidebar.button("Pelajari Cara Kerja Model"):
         go_to_docs()
         st.rerun()
 
-
-    # --- MAIN CONTENT AREA ---
     st.title("Sistem Rekomendasi Produk FMCG")
 
-    # --- USER GUIDE EXPANDER ---
     with st.expander("📖 Panduan Penggunaan Aplikasi", expanded=True):
         col_g1, col_g2, col_g3 = st.columns(3)
         with col_g1:
@@ -335,46 +291,29 @@ elif st.session_state.page == "simulation":
 
     st.divider()
 
-    # Selected Customer Status
     st.markdown(f"### Analisis untuk Customer ID: `{selected_user_id}`")
 
-    # EXECUTION BUTTON
     if st.button("Tampilkan Analisis & Rekomendasi", type="primary"):
-        
-        # --- INFERENCE LOGIC (TWO-TOWER / VECTOR SEARCH) ---
         def get_twotower_recommendations(customer_id, n=10):
             """
             Melakukan pencarian vektor (Dot Product) untuk menemukan item paling mirip dengan user.
             """
-            # 1. Cek User ID
             if str(customer_id) not in user_map:
                 return []
             
-            # 2. Ambil Index & Vektor User
             u_idx = user_map[str(customer_id)]
             target_user_vec = user_vecs[u_idx] # Shape: (Embedding_Dim,)
             
-            # 3. Hitung Skor (Dot Product) vs Semua Item
-            # item_vecs shape: (N_Items, Embedding_Dim)
-            # scores shape: (N_Items,)
             scores = np.dot(item_vecs, target_user_vec)
             
-            # 4. Ambil Top-N Index Terbaik
-            # np.argsort mengurutkan dari kecil ke besar, ambil n terakhir, lalu balik urutannya
-            # Kita ambil lebih banyak dulu (n + 50) untuk jaga-jaga jika ada yg difilter
             top_indices_candidates = np.argsort(scores)[-(n + 100):][::-1]
             
-            # 5. Filter & Mapping
-            # Filter history untuk menampilkan 'Discovery' (Barang baru saja)
-            # Pastikan kolom customer_id di order_cust tipe-nya string agar match
             already_bought = order_cust[order_cust['customer_id'].astype(str) == str(customer_id)]['mid'].unique().tolist()
             already_bought_set = set([str(x) for x in already_bought])
             
             final_recs = []
             for idx in top_indices_candidates:
                 mid = item_inv_map[idx]
-                
-                # JIKA ingin menampilkan hanya barang baru (Discovery):
                 if mid not in already_bought_set:
                     final_recs.append(mid)
                 
@@ -383,14 +322,10 @@ elif st.session_state.page == "simulation":
             
             return final_recs
 
-        # 1. Fetch User History
-        # Pastikan tipe data sama (string)
         user_history_mids = order_cust[order_cust['customer_id'].astype(str) == str(selected_user_id)]['mid'].unique().tolist()
         
-        # 2. Fetch Recommendations (Using Two Tower Logic)
         recs_mids = get_twotower_recommendations(selected_user_id, n=n_recs)
 
-        # --- METRICS DISPLAY ---
         col_m1, col_m2 = st.columns(2)
         with col_m1:
             st.metric("Total SKU yang Pernah Diorder", f"{len(user_history_mids)} Item")
@@ -399,10 +334,8 @@ elif st.session_state.page == "simulation":
         
         st.markdown("---")
 
-        # --- DATAFRAME DISPLAY ---
         col_left, col_right = st.columns(2)
 
-        # LEFT COLUMN: HISTORY TABLE
         with col_left:
             st.subheader("📦 Riwayat Belanja (History)")
             st.caption("Daftar produk yang **sudah pernah** dibeli oleh Customer ini.")
@@ -411,10 +344,8 @@ elif st.session_state.page == "simulation":
                 history_df = pd.DataFrame({'mid': user_history_mids})
                 history_df['mid'] = history_df['mid'].astype(str)
                 
-                # Merge with metadata
                 history_display = history_df.merge(full_product, on='mid', how='left')
                 
-                # Rename columns and apply masking
                 display_df = history_display[['mid', 'mid_desc', 'desc2']].rename(columns={
                     'mid': 'Kode Produk',
                     'mid_desc': 'Nama Produk',
@@ -426,7 +357,6 @@ elif st.session_state.page == "simulation":
             else:
                 st.info("Customer ini belum memiliki riwayat transaksi.")
 
-        # RIGHT COLUMN: RECOMMENDATION TABLE
         with col_right:
             st.subheader(f"✨ Saran Order (Rekomendasi)")
             st.caption("Daftar produk yang **direkomendasikan** dan memiliki **relevansi tinggi**.")
@@ -435,10 +365,8 @@ elif st.session_state.page == "simulation":
                 recs_df = pd.DataFrame({'mid': recs_mids})
                 recs_df['mid'] = recs_df['mid'].astype(str)
                 
-                # Merge with metadata
                 recs_display = recs_df.merge(full_product, on='mid', how='left')
                 
-                # Rename columns and apply masking
                 display_recs = recs_display[['mid', 'mid_desc', 'desc2']].rename(columns={
                     'mid': 'Kode Produk',
                     'mid_desc': 'Nama Produk',
@@ -451,5 +379,4 @@ elif st.session_state.page == "simulation":
                 st.warning("Data belum cukup untuk memberikan rekomendasi spesifik.")
 
     else:
-        # Initial State
         st.info("👋 Silakan ikuti panduan di atas untuk memulai analisis.")
