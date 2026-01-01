@@ -158,7 +158,7 @@ if st.session_state.page == "documentation":
         st.header("2. Spesifikasi Arsitektur Two Tower")
         st.write("""
         Berdasarkan eksperimen penelitian, arsitektur berikut adalah arsitektur terbaik dari hasil hyperparameter tuning dengan memberikan keseimbangan optimal 
-        antara metrik **Precision@10** dan **Coverage**.
+        antara metrik **Precision@10**, **Recall@10**, **NDCG@10**, dan **Coverage**.
         """)
 
         # Metric Cards
