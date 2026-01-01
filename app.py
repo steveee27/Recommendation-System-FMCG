@@ -142,7 +142,7 @@ if st.session_state.page == "documentation":
         st.divider()
         
         st.subheader("Detail Implementasi Layer")
-        st.markdown("Arsitektur terdiri dari dua jaringan saraf independen (*Twin Towers*) yang simetris:")
+        st.markdown("Arsitektur terdiri dari dua neural network independen (*Twin Towers*) yang simetris:")
 
         with st.expander("🅰️ User Tower Specification", expanded=True):
             st.markdown("""
