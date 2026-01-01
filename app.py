@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import numpy as np
+import pickle
 
 # ==========================================
 # 1. CONFIGURATION & UTILITY FUNCTIONS
@@ -16,14 +17,6 @@ st.set_page_config(
 def mask_product_name(name):
     """
     Masks the product name for privacy/display purposes.
-    It takes the first letter of each word until a numeric character is encountered.
-    Words containing numbers and subsequent words remain unchanged.
-    
-    Args:
-        name (str): Original product name.
-    
-    Returns:
-        str: Masked product name.
     """
     words = name.split()
     masked_letters = []
@@ -32,12 +25,10 @@ def mask_product_name(name):
     
     for w in words:
         if not numeric_found:
-            # Check if word contains a digit
             if re.search(r'\d', w):  
                 numeric_found = True
                 remaining_words.append(w)
             else:
-                # Take only the first letter
                 masked_letters.append(w[0]) 
         else:
             remaining_words.append(w)
@@ -50,46 +41,50 @@ def mask_product_name(name):
         return masked_part
 
 # ==========================================
-# 2. DATA LOADING FUNCTION
+# 2. DATA LOADING FUNCTION (TWO-TOWER)
 # ==========================================
 @st.cache_data
 def load_data():
     """
-    Loads data chunks from the 'app_data' directory and merges them back 
-    into full pandas DataFrames.
-    
-    Returns:
-        tuple: (predictions_df, products_df, history_df)
+    Loads Two-Tower artifacts: Embeddings (.npy) and ID Mappings (.pkl).
+    Also loads user history and product metadata.
     """
-    # 1. LOAD PREDICTED RATINGS (Split into 6 parts)
-    rating_parts = []
-    for i in range(1, 7):
-        filename = f'app_data/predicted_ratings_part{i}.pkl'
-        # compression='gzip' is required as data was saved with this compression
-        part = pd.read_pickle(filename, compression='gzip')
-        rating_parts.append(part)
-    predictions = pd.concat(rating_parts)
+    # 1. LOAD EMBEDDINGS (Vektor)
+    # File .npy sangat cepat dimuat dan ringan
+    user_vecs = np.load('app_data/user_embeddings.npy')
+    item_vecs = np.load('app_data/item_embeddings.npy')
+    
+    # 2. LOAD MAPPINGS (Kamus ID)
+    with open('app_data/twotower_maps.pkl', 'rb') as f:
+        maps = pickle.load(f)
+        
+    # Buat dictionary agar pencarian cepat: ID -> Index Baris
+    user_map = {str(uid): i for i, uid in enumerate(maps['user_ids'])}
+    
+    # Buat dictionary kebalikannya untuk Item: Index Baris -> ID
+    item_inv_map = {i: str(mid) for i, mid in enumerate(maps['item_ids'])}
 
-    # 2. LOAD USER HISTORY (Check up to 6 parts)
+    # 3. LOAD USER HISTORY (Check up to 6 parts)
     history_parts = []
     for i in range(1, 7):
         filename = f'app_data/user_history_part{i}.pkl'
         try:
+            # compression='gzip' is required as data was saved with this compression
             part = pd.read_pickle(filename, compression='gzip')
             history_parts.append(part)
         except FileNotFoundError:
-            continue # Skip if file part doesn't exist
+            continue
     history = pd.concat(history_parts)
 
-    # 3. LOAD PRODUCT METADATA (Single file)
+    # 4. LOAD PRODUCT METADATA (Single file)
     products = pd.read_pickle('app_data/product_metadata.pkl')
 
-    return predictions, products, history
+    return user_vecs, item_vecs, user_map, item_inv_map, products, history
 
-# Execute load_data globally to ensure data is available on app start
+# Execute load_data globally
 try:
-    with st.spinner('Menyiapkan database sistem...'):
-        predicted_ratings_df, full_product, order_cust = load_data()
+    with st.spinner('Menyiapkan database sistem (Loading Embeddings)...'):
+        user_vecs, item_vecs, user_map, item_inv_map, full_product, order_cust = load_data()
 except Exception as e:
     st.error(f"Gagal memuat data: {e}")
     st.stop()
@@ -98,97 +93,100 @@ except Exception as e:
 # ==========================================
 # 3. SESSION STATE & NAVIGATION LOGIC
 # ==========================================
-# Initialize session state for page navigation if it doesn't exist
 if 'page' not in st.session_state:
     st.session_state.page = "simulation"
 
 def go_to_docs():
-    """Switch state to documentation page."""
     st.session_state.page = "documentation"
 
 def go_to_simulation():
-    """Switch state to simulation page."""
     st.session_state.page = "simulation"
 
 
 # ==========================================
-# PAGE 1: DOCUMENTATION (HOW IT WORKS)
+# PAGE 1: DOCUMENTATION (TWO-TOWER EXPLANATION)
 # ==========================================
 if st.session_state.page == "documentation":
     
-    # Back button to return to the main app
     st.button("⬅️ Kembali ke Simulasi", on_click=go_to_simulation)
     
-    st.title("📖 Cara Kerja Model & Aplikasi")
-    st.markdown("Dokumentasi teknis mengenai metodologi sistem rekomendasi yang digunakan.")
+    st.title("📖 Cara Kerja Model: Two-Tower Architecture")
+    st.markdown("Dokumentasi teknis mengenai model *Deep Learning* yang digunakan untuk rekomendasi.")
     st.divider()
 
     # --- SECTION 1: CORE CONCEPT ---
-    st.header("1. Konsep Utama: Collaborative Filtering")
+    st.header("1. Konsep Utama: Neural Collaborative Filtering")
     st.info("""
-    **Prinsip Dasar:** Sistem memprediksi preferensi customer berdasarkan kemiripan pola transaksi dengan customer lain.
+    **Prinsip Dasar:** Menggunakan dua jaringan saraf (Neural Networks) terpisah untuk mempelajari representasi 'User' dan 'Barang' dalam ruang vektor yang sama.
     """)
     
     col_d1, col_d2 = st.columns([1, 1])
     with col_d1:
         st.markdown("""
-        Pendekatan ini berfokus pada **pola interaksi historis**, bukan pada atribut fisik produk.
+        Berbeda dengan metode statistik biasa, model ini mempelajari **fitur kompleks**:
         
-        * **User:** Customer ID
-        * **Item:** Material ID (SKU)
-        * **Interaksi:** Data Transaksi Pembelian
+        * **User Tower:** Mempelajari profil customer (ID, demografi, history belanja).
+        * **Item Tower:** Mempelajari karakteristik produk (ID, kategori, harga, teks deskripsi).
         """)
     with col_d2:
         st.markdown("""
         **Analogi:**
-        Jika **Customer A** membeli produk [X, Y, Z] dan **Customer B** membeli produk [X, Y]...
+        Bayangkan biro jodoh yang canggih.
+        * **Tower A** mewawancarai Pria (User) untuk memahami kepribadiannya.
+        * **Tower B** mewawancarai Wanita (Item) untuk memahami kepribadiannya.
         
-        Sistem mengidentifikasi bahwa Customer B memiliki kemiripan profil dengan Customer A. Oleh karena itu, sistem akan merekomendasikan produk **Z** kepada Customer B, karena produk tersebut belum dibeli namun relevan dengan profilnya.
+        Sistem kemudian memetakan mereka ke dalam "Peta Kepribadian". Jika posisi mereka berdekatan di peta, berarti mereka **cocok** (skor tinggi).
         """)
+    
 
     st.divider()
 
     # --- SECTION 2: ALGORITHM DETAILS ---
-    st.header("2. Algoritma: Truncated SVD")
-    st.markdown("""
-    Model ini dibangun menggunakan metode **Matrix Factorization** dengan algoritma *Truncated Singular Value Decomposition (SVD)*. 
-    Berikut adalah tahapan pemrosesan data:
+    st.header("2. Arsitektur: Two-Tower Neural Network")
+    st.markdown("Model ini terdiri dari dua menara (*towers*) independen yang bertemu di ujung untuk menghitung skor.")
+
+    # Step 1: Embedding Generation
+    st.subheader("Langkah 1: Embedding Layers (Representasi Vektor)")
+    st.write("""
+    Setiap Customer ID dan Product ID diubah menjadi vektor angka (Embedding). 
+    Model ini tidak hanya melihat ID, tapi juga fitur lain (seperti Kategori Produk atau Lokasi User) yang digabungkan (*Concatenate*) menjadi satu vektor informasi yang kaya.
     """)
 
-    # Step 1: Matrix Creation
-    st.subheader("Langkah 1: Penyusunan User-Item Matrix")
-    st.code("matrix_train = matrix[matrix['customer_id'].isin(train_final['customer_id'].unique())]", language="python")
-    st.write("Data transaksi dikonversi menjadi sebuah tabel matriks besar (User-Item Matrix) di mana baris merepresentasikan **Customer** dan kolom merepresentasikan **Produk**.")
-
-    # Step 2: Decomposition
-    st.subheader("Langkah 2: Reduksi Dimensi (Decomposition)")
-    st.code("svd = TruncatedSVD(n_components=50, random_state=42)", language="python")
-    st.write("""
-    Matriks awal memiliki dimensi yang sangat besar dan bersifat *sparse* (banyak nilai kosong karena satu customer tidak mungkin membeli semua produk).
+    # Step 2: Training
+    st.subheader("Langkah 2: Proses Training (Dot Product)")
+    st.code("""
+    # Pseudo-code Arsitektur
+    user_embedding = user_tower(user_features)
+    item_embedding = item_tower(item_features)
     
-    SVD memproses matriks ini dengan memecahnya menjadi **50 Komponen Laten (Latent Features)**. Komponen ini merepresentasikan pola tersembunyi atau karakteristik abstrak dari interaksi user dan item.
+    # Menghitung kecocokan
+    score = dot_product(user_embedding, item_embedding)
+    """, language="python")
+    st.write("""
+    Tujuan model saat training adalah memaksimalkan skor (Dot Product) untuk pasangan user-item yang benar-benar terjadi (transaksi positif) dan meminimalkannya untuk yang tidak pernah terjadi.
     """)
-
-    # Step 3: Reconstruction
-    st.subheader("Langkah 3: Kalkulasi Skor Prediksi")
-    st.code("predicted_ratings = np.dot(matrix_decomposed, svd.components_)", language="python")
-    st.write("""
-    Melalui perkalian matriks hasil dekomposisi, sistem menghasilkan **Matriks Prediksi**.
     
-    Outputnya adalah nilai skor (rating) untuk setiap pasangan Customer dan Produk. Skor ini mengindikasikan tingkat probabilitas atau relevansi produk tersebut bagi customer tertentu.
+
+    # Step 3: Output
+    st.subheader("Langkah 3: Output Embeddings")
+    st.write("""
+    Hasil akhir dari training bukanlah "Tabel Skor" (seperti SVD), melainkan **Kamus Vektor**.
+    * Setiap User memiliki koordinat vektor (misal: 16 dimensi).
+    * Setiap Produk memiliki koordinat vektor (16 dimensi).
+    * Kemiripan dihitung secara *real-time* menggunakan jarak antar vektor ini.
     """)
 
     st.divider()
 
     # --- SECTION 3: INFERENCE FLOW ---
     st.header("3. Alur Proses Rekomendasi pada Aplikasi")
-    st.markdown("Saat pengguna meminta rekomendasi, sistem melakukan langkah-langkah berikut secara *real-time*:")
+    st.markdown("Aplikasi ini menggunakan teknik *Fast Retrieval* tanpa perlu menjalankan model TensorFlow yang berat:")
     
     st.success("""
-    1.  **Lookup:** Mengidentifikasi data vektor milik Customer ID yang dipilih.
-    2.  **Sorting:** Mengurutkan seluruh produk berdasarkan nilai prediksi tertinggi (High Probability).
-    3.  **Filtering:** Mengambil sejumlah *N* produk teratas sesuai filter yang diinginkan.
-    4.  **Serving:** Menampilkan hasil rekomendasi dalam bentuk tabel interaktif.
+    1.  **Load Vectors:** Memuat vektor User dan Item yang sudah dihitung sebelumnya (`.npy`).
+    2.  **User Lookup:** Mengambil vektor milik Customer yang dipilih.
+    3.  **Similarity Search:** Melakukan perkalian matriks (*Dot Product*) antara Vektor User tersebut dengan **SEMUA** Vektor Item.
+    4.  **Ranking:** Barang dengan hasil perkalian tertinggi dianggap paling relevan.
     """)
     
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -204,7 +202,8 @@ elif st.session_state.page == "simulation":
     st.sidebar.header("⚙️ Filter Customer")
 
     # 1. Customer Selection
-    available_users = predicted_ratings_df.index.unique().tolist()
+    # Mengambil list user ID dari user_map dictionary
+    available_users = list(user_map.keys())
     selected_user_id = st.sidebar.selectbox(
         "1. Pilih Customer ID:", 
         available_users,
@@ -223,7 +222,7 @@ elif st.session_state.page == "simulation":
     
     # --- SIDEBAR: LINK TO DOCS ---
     st.sidebar.markdown("### ℹ️ Informasi Sistem")
-    st.sidebar.write("Pelajari metodologi di balik rekomendasi ini.")
+    st.sidebar.write("Pelajari model Two-Tower di balik aplikasi ini.")
     if st.sidebar.button("Pelajari Cara Kerja Model"):
         go_to_docs()
         st.rerun()
@@ -250,23 +249,38 @@ elif st.session_state.page == "simulation":
     # EXECUTION BUTTON
     if st.button("Tampilkan Analisis & Rekomendasi", type="primary"):
         
-        # --- INFERENCE LOGIC ---
-        def get_svd_recommendations(customer_id, n=10):
+        # --- INFERENCE LOGIC (TWO-TOWER / VECTOR SEARCH) ---
+        def get_twotower_recommendations(customer_id, n=10):
             """
-            Retrieves top N recommendations for a specific customer based on SVD predictions.
+            Melakukan pencarian vektor (Dot Product) untuk menemukan item paling mirip dengan user.
             """
-            if customer_id not in predicted_ratings_df.index: 
+            # 1. Cek User ID
+            if str(customer_id) not in user_map:
                 return []
-            # Sort predictions descending
-            sorted_preds = predicted_ratings_df.loc[customer_id].sort_values(ascending=False)
-            # Return Top N indices
-            return [str(mid) for mid in sorted_preds.head(n).index]
+            
+            # 2. Ambil Index & Vektor User
+            u_idx = user_map[str(customer_id)]
+            target_user_vec = user_vecs[u_idx] # Shape: (Embedding_Dim,)
+            
+            # 3. Hitung Skor (Dot Product) vs Semua Item
+            # item_vecs shape: (N_Items, Embedding_Dim)
+            # scores shape: (N_Items,)
+            scores = np.dot(item_vecs, target_user_vec)
+            
+            # 4. Ambil Top-N Index Terbaik
+            # np.argsort mengurutkan dari kecil ke besar, ambil n terakhir, lalu balik urutannya
+            top_indices = np.argsort(scores)[-n:][::-1]
+            
+            # 5. Translate Index ke Product ID (mid)
+            recommended_mids = [item_inv_map[i] for i in top_indices]
+            
+            return recommended_mids
 
         # 1. Fetch User History
         user_history_mids = order_cust[order_cust['customer_id'] == selected_user_id]['mid'].unique().tolist()
         
-        # 2. Fetch Recommendations
-        recs_mids = get_svd_recommendations(selected_user_id, n=n_recs)
+        # 2. Fetch Recommendations (Using Two Tower Logic)
+        recs_mids = get_twotower_recommendations(selected_user_id, n=n_recs)
 
         # --- METRICS DISPLAY ---
         col_m1, col_m2 = st.columns(2)
@@ -286,7 +300,6 @@ elif st.session_state.page == "simulation":
             st.caption("Daftar produk yang **sudah pernah** dibeli oleh Customer ini.")
             
             if user_history_mids:
-                # Create DataFrame for history
                 history_df = pd.DataFrame({'mid': user_history_mids})
                 history_df['mid'] = history_df['mid'].astype(str)
                 
@@ -301,7 +314,6 @@ elif st.session_state.page == "simulation":
                 })
                 display_df['Nama Produk'] = display_df['Nama Produk'].apply(mask_product_name)
 
-                # Render Table
                 st.dataframe(display_df, use_container_width=True, hide_index=True, height=500)
             else:
                 st.info("Customer ini belum memiliki riwayat transaksi.")
@@ -312,7 +324,6 @@ elif st.session_state.page == "simulation":
             st.caption("Daftar produk yang **direkomendasikan** dan memiliki **relevansi tinggi**.")
             
             if recs_mids:
-                # Create DataFrame for recommendations
                 recs_df = pd.DataFrame({'mid': recs_mids})
                 recs_df['mid'] = recs_df['mid'].astype(str)
                 
@@ -327,11 +338,10 @@ elif st.session_state.page == "simulation":
                 })
                 display_recs['Nama Produk'] = display_recs['Nama Produk'].apply(mask_product_name)
 
-                # Render Table
                 st.dataframe(display_recs, use_container_width=True, hide_index=True, height=500)
             else:
                 st.warning("Data belum cukup untuk memberikan rekomendasi spesifik.")
 
     else:
-        # Initial State (Before button click)
+        # Initial State
         st.info("👋 Silakan ikuti panduan di atas untuk memulai analisis.")
