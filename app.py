@@ -99,92 +99,138 @@ def go_to_simulation():
 # ==========================================
 # PAGE 1: DOCUMENTATION (TWO-TOWER EXPLANATION)
 # ==========================================
+import streamlit as st
+
+# ==========================================
+# PAGE: DOCUMENTATION (ACADEMIC STYLE)
+# ==========================================
 if st.session_state.page == "documentation":
     
+    # Tombol Navigasi
     st.button("⬅️ Kembali ke Simulasi", on_click=go_to_simulation)
     
-    st.title("📖 Cara Kerja Model: Two-Tower Architecture")
-    st.markdown("Dokumentasi teknis mengenai model *Deep Learning* yang digunakan untuk rekomendasi.")
+    st.title("Dokumentasi Teknis: Arsitektur Two-Tower")
+    st.markdown("""
+    Halaman ini menjelaskan landasan teoritis dan implementasi teknis dari model rekomendasi yang digunakan dalam aplikasi ini.
+    Model dibangun menggunakan pendekatan *Representation Learning* dengan arsitektur *Two-Tower Neural Network*.
+    """)
     st.divider()
 
-    # --- SECTION 1: CORE CONCEPT ---
-    st.header("1. Konsep Utama: Neural Collaborative Filtering")
-    st.info("""
-    **Prinsip Dasar:** Menggunakan dua jaringan saraf (Neural Networks) terpisah untuk mempelajari representasi 'User' dan 'Barang' dalam ruang vektor yang sama.
-    """)
+    # --- TAB 1: KONSEP TEORITIS ---
+    st.header("1. Konsep Dasar: Neural Collaborative Filtering")
     
-    col_d1, col_d2 = st.columns([1, 1])
-    with col_d1:
-        st.markdown("""
-        Berbeda dengan metode statistik biasa, model ini mempelajari **fitur kompleks**:
+    col1, col2 = st.columns([1.5, 1])
+    
+    with col1:
+        st.write("""
+        Secara fundamental, sistem ini bertujuan untuk memetakan **Pengguna (User)** dan **Barang (Item)** ke dalam ruang vektor berdimensi rendah yang sama (*Shared Latent Vector Space*).
         
-        * **User Tower:** Mempelajari profil customer (ID, demografi, history belanja).
-        * **Item Tower:** Mempelajari karakteristik produk (ID, kategori, harga, teks deskripsi).
+        Berbeda dengan metode faktorisasi matriks tradisional, pendekatan *Two-Tower* memungkinkan kita untuk memasukkan **fitur sampingan (side features)**—baik numerik maupun kategorikal—sebagai input model. Hal ini mengatasi masalah *Cold Start* karena model dapat melakukan inferensi berdasarkan atribut user/item meskipun belum ada riwayat interaksi.
         """)
-    with col_d2:
-        st.markdown("""
-        **Analogi:**
-        Bayangkan biro jodoh yang canggih.
-        * **Tower A** mewawancarai Pria (User) untuk memahami kepribadiannya.
-        * **Tower B** mewawancarai Wanita (Item) untuk memahami kepribadiannya.
+        st.info("""
+        **Hipotesis Utama:**
+        Jika vektor representasi User ($u$) dan vektor representasi Item ($v$) memiliki arah yang selaras (sudut berdekatan) dalam ruang vektor, maka probabilitas User tersebut menyukai Item tersebut adalah tinggi.
+        """)
+    
+    with col2:
+        st.markdown("#### Ilustrasi Ruang Vektor")
+        # Visualisasi sederhana konsep Dot Product
+        st.latex(r'''
+        Sim(u, v) = u \cdot v = \sum_{i=1}^{n} u_i v_i
+        ''')
+        st.caption("""
+        Skor relevansi dihitung menggunakan **Dot Product**. Semakin besar nilainya, semakin tinggi tingkat rekomendasi.
+        """)
+
+    st.markdown("---")
+
+    # --- TAB 2: ARSITEKTUR MODEL ---
+    st.header("2. Implementasi Arsitektur Model")
+    st.write("Model diimplementasikan menggunakan TensorFlow/Keras dengan struktur sebagai berikut:")
+
+    # Menggunakan Expander agar halaman tidak terlalu panjang
+    with st.expander("Detail Lapisan (Layer) User Tower & Item Tower", expanded=True):
+        st.markdown("Berdasarkan fungsi `build_two_tower_model`, arsitektur dibagi menjadi dua menara independen:")
         
-        Sistem kemudian memetakan mereka ke dalam "Peta Kepribadian". Jika posisi mereka berdekatan di peta, berarti mereka **cocok** (skor tinggi).
-        """)
-    st.markdown("")
+        c_user, c_item = st.columns(2)
+        
+        with c_user:
+            st.subheader("🅰️ User Tower")
+            st.markdown("**Input:**")
+            st.code("user_id, numeric_features, cat_features", language="text")
+            st.markdown("**Proses:**")
+            st.markdown("""
+            1. **Embedding Layer:** Mengubah ID User dan fitur kategori menjadi vektor padat.
+            2. **Concatenation:** Menggabungkan Embedding dengan fitur numerik (yang sudah dinormalisasi).
+            3. **Dense Layers:** Transformasi non-linear menggunakan MLP (Multi-Layer Perceptron).
+            """)
+            st.markdown("**Output:**")
+            st.code("Vektor Dimensi 8 (User Representation)", language="text")
 
-    st.divider()
+        with c_item:
+            st.subheader("🅱️ Item Tower")
+            st.markdown("**Input:**")
+            st.code("item_id, numeric_features, cat_features", language="text")
+            st.markdown("**Proses:**")
+            st.markdown("""
+            1. **Embedding Layer:** Mengubah ID Item dan fitur kategori (Brand, Kategori) menjadi vektor.
+            2. **Concatenation:** Penggabungan dengan fitur numerik produk.
+            3. **Dense Layers:** Struktur identik dengan User Tower untuk menjaga keselarasan dimensi.
+            """)
+            st.markdown("**Output:**")
+            st.code("Vektor Dimensi 8 (Item Representation)", language="text")
 
-    # --- SECTION 2: ALGORITHM DETAILS ---
-    st.header("2. Arsitektur: Two-Tower Neural Network")
-    st.markdown("Model ini terdiri dari dua menara (*towers*) independen yang bertemu di ujung untuk menghitung skor.")
-
-    # Step 1: Embedding Generation
-    st.subheader("Langkah 1: Embedding Layers (Representasi Vektor)")
-    st.write("""
-    Setiap Customer ID dan Product ID diubah menjadi vektor angka (Embedding). 
-    Model ini tidak hanya melihat ID, tapi juga fitur lain (seperti Kategori Produk atau Lokasi User) yang digabungkan (*Concatenate*) menjadi satu vektor informasi yang kaya.
-    """)
-
-    # Step 2: Training
-    st.subheader("Langkah 2: Proses Training (Dot Product)")
+    st.markdown("### Snippet Kode Implementasi")
+    st.write("Berikut adalah potongan kode asli yang mendefinisikan struktur input hibrida (Numerik + Kategorikal):")
     st.code("""
-    # Pseudo-code Arsitektur
-    user_embedding = user_tower(user_features)
-    item_embedding = item_tower(item_features)
-    
-    # Menghitung kecocokan
-    score = dot_product(user_embedding, item_embedding)
+# Representasi User Tower (dari source code)
+u_id_emb = Flatten()(Embedding(n_users, embedding_dim)(user_id_input))
+# ... embedding kategori lainnya ...
+x_user = Concatenate()([u_id_emb, user_num_input] + u_cat_embs)
+
+# Transformasi Non-Linear
+for units in tower_layers:
+    x_user = Dense(units, activation='relu')(x_user)
+    x_user = Dropout(dropout_rate)(x_user)
+
+# Final User Vector
+user_vec = Dense(8, activation='relu')(x_user) 
     """, language="python")
-    st.write("""
-    Tujuan model saat training adalah memaksimalkan skor (Dot Product) untuk pasangan user-item yang benar-benar terjadi (transaksi positif) dan meminimalkannya untuk yang tidak pernah terjadi.
-    """)
-    st.markdown("")
 
-    # Step 3: Output
-    st.subheader("Langkah 3: Output Embeddings")
+    st.markdown("---")
+
+    # --- TAB 3: MEKANISME INFERENSI ---
+    st.header("3. Mekanisme Inferensi (Retrieval)")
     st.write("""
-    Hasil akhir dari training bukanlah "Tabel Skor" (seperti SVD), melainkan **Kamus Vektor**.
-    * Setiap User memiliki koordinat vektor (misal: 16 dimensi).
-    * Setiap Produk memiliki koordinat vektor (16 dimensi).
-    * Kemiripan dihitung secara *real-time* menggunakan jarak antar vektor ini.
+    Salah satu keunggulan utama arsitektur ini adalah efisiensi saat *serving* (penggunaan di aplikasi nyata). 
+    Proses prediksi tidak dilakukan dengan memasangkan user dengan jutaan barang satu per satu (yang akan sangat lambat), melainkan menggunakan teknik **Nearest Neighbor Search**.
     """)
 
-    st.divider()
-
-    # --- SECTION 3: INFERENCE FLOW ---
-    st.header("3. Alur Proses Rekomendasi pada Aplikasi")
-    st.markdown("Aplikasi ini menggunakan teknik *Fast Retrieval* tanpa perlu menjalankan model TensorFlow yang berat:")
-    
     st.success("""
-    1.  **Load Vectors:** Memuat vektor User dan Item yang sudah dihitung sebelumnya (`.npy`).
-    2.  **User Lookup:** Mengambil vektor milik Customer yang dipilih.
-    3.  **Similarity Search:** Melakukan perkalian matriks (*Dot Product*) antara Vektor User tersebut dengan **SEMUA** Vektor Item.
-    4.  **Ranking:** Barang dengan hasil perkalian tertinggi dianggap paling relevan.
+    **Alur Algoritma pada Aplikasi:**
+    1.  **Pre-computation:** Semua Item diproses melalui *Item Tower* sekali saja untuk menghasilkan `Item Vectors`. Vektor ini disimpan dalam Index (menggunakan FAISS/Annoy).
+    2.  **Real-time Query:** Saat User Login, data user dimasukkan ke *User Tower* untuk menghasilkan `User Vector`.
+    3.  **Similarity Search:** Sistem mencari Item Vectors yang memiliki jarak terdekat (Dot Product tertinggi) dengan User Vector.
     """)
-    
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.button("⬅️ Mengerti, Kembali ke Aplikasi", on_click=go_to_simulation, type="primary")
 
+    st.markdown("#### Implementasi pada Kode")
+    st.code("""
+def get_twotower_recommendations(customer_id):
+    # 1. Generate User Embedding secara Real-time
+    user_embedding = user_tower.predict(user_input)
+    
+    # 2. Pencarian Vektor Terdekat (Retrieval)
+    # 'index' berisi database vektor seluruh item
+    _, I = index.search(user_embedding, n_recs=10)
+    
+    # 3. Return ID Barang
+    return all_item_data.iloc[I[0]]['mid'].tolist()
+    """, language="python")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.info("Dengan metode ini, kompleksitas waktu pencarian dapat ditekan secara signifikan dibandingkan metode konvensional.")
+
+    st.button("⬅️ Kembali ke Simulasi", on_click=go_to_simulation, key='btn_back_bottom')
 
 # ==========================================
 # PAGE 2: SIMULATION (MAIN APP)
