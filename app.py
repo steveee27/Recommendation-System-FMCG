@@ -96,140 +96,193 @@ def go_to_simulation():
     st.session_state.page = "simulation"
 
 
-# ==========================================
-# PAGE 1: DOCUMENTATION (TWO-TOWER EXPLANATION)
-# ==========================================
 import streamlit as st
 
 # ==========================================
-# PAGE: DOCUMENTATION (ACADEMIC STYLE)
+# PAGE: DOCUMENTATION (FULL ACADEMIC)
 # ==========================================
 if st.session_state.page == "documentation":
     
     # Tombol Navigasi
     st.button("⬅️ Kembali ke Simulasi", on_click=go_to_simulation)
     
-    st.title("Dokumentasi Teknis: Arsitektur Two-Tower")
+    st.title("Dokumentasi Teknis: Sistem Rekomendasi Two-Tower")
     st.markdown("""
-    Halaman ini menjelaskan landasan teoritis dan implementasi teknis dari model rekomendasi yang digunakan dalam aplikasi ini.
-    Model dibangun menggunakan pendekatan *Representation Learning* dengan arsitektur *Two-Tower Neural Network*.
+    **Ringkasan:** Dokumen ini menguraikan landasan teoritis, spesifikasi arsitektur *Champion Model*, 
+    dan mekanisme inferensi *high-speed retrieval* yang diimplementasikan dalam sistem rekomendasi ini.
     """)
     st.divider()
 
-    # --- TAB 1: KONSEP TEORITIS ---
-    st.header("1. Konsep Dasar")
-    
-    col1, col2 = st.columns([1.5, 1])
-    
-    with col1:
+    # Membuat Tabs untuk struktur yang rapi
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📚 Landasan Teori", 
+        "🏗️ Arsitektur Model", 
+        "⚙️ Algoritma Training",
+        "🚀 Mekanisme Inferensi (FAISS)"
+    ])
+
+    # --- TAB 1: LANDASAN TEORI ---
+    with tab1:
+        st.header("1. Konsep Dasar: Neural Collaborative Filtering")
+        
         st.write("""
-        Secara fundamental, sistem ini bertujuan untuk memetakan **Pengguna (User)** dan **Barang (Item)** ke dalam ruang vektor berdimensi rendah yang sama (*Shared Latent Vector Space*).
-        
-        Berbeda dengan metode faktorisasi matriks tradisional, pendekatan *Two-Tower* memungkinkan kita untuk memasukkan **fitur sampingan (side features)**—baik numerik maupun kategorikal—sebagai input model. Hal ini mengatasi masalah *Cold Start* karena model dapat melakukan inferensi berdasarkan atribut user/item meskipun belum ada riwayat interaksi.
+        Sistem ini dibangun di atas paradigma *Representation Learning*. Berbeda dengan pendekatan *Collaborative Filtering* tradisional (seperti *Matrix Factorization*) 
+        yang hanya mengandalkan interaksi ID pengguna dan item, arsitektur **Two-Tower** memungkinkan integrasi **fitur sampingan (*side features*)** yang kaya.
         """)
+
         st.info("""
-        **Hipotesis Utama:**
-        Jika vektor representasi User ($u$) dan vektor representasi Item ($v$) memiliki arah yang selaras (sudut berdekatan) dalam ruang vektor, maka probabilitas User tersebut menyukai Item tersebut adalah tinggi.
-        """)
-    
-    with col2:
-        st.markdown("#### Ilustrasi Ruang Vektor")
-        # Visualisasi sederhana konsep Dot Product
-        st.latex(r'''
-        Sim(u, v) = u \cdot v = \sum_{i=1}^{n} u_i v_i
-        ''')
-        st.caption("""
-        Skor relevansi dihitung menggunakan **Dot Product**. Semakin besar nilainya, semakin tinggi tingkat rekomendasi.
+        **Prinsip Kerja Utama:**
+        Sistem bertujuan memetakan entitas **Pengguna (User)** dan **Barang (Item)** ke dalam **Ruang Vektor Laten Bersama (*Shared Latent Vector Space*)**.
+        Dalam ruang ini, relevansi diukur berdasarkan kedekatan geometris antar vektor.
         """)
 
-    st.markdown("---")
-
-    # --- TAB 2: ARSITEKTUR MODEL ---
-    st.header("2. Implementasi Arsitektur Model")
-    st.write("Model diimplementasikan menggunakan TensorFlow/Keras dengan struktur sebagai berikut:")
-
-    # Menggunakan Expander agar halaman tidak terlalu panjang
-    with st.expander("Detail Lapisan (Layer) User Tower & Item Tower", expanded=True):
-        st.markdown("Berdasarkan fungsi `build_two_tower_model`, arsitektur dibagi menjadi dua menara independen:")
-        
-        c_user, c_item = st.columns(2)
-        
-        with c_user:
-            st.subheader("🅰️ User Tower")
-            st.markdown("**Input:**")
-            st.code("user_id, numeric_features, cat_features", language="text")
-            st.markdown("**Proses:**")
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            st.subheader("Keunggulan Arsitektur")
             st.markdown("""
-            1. **Embedding Layer:** Mengubah ID User dan fitur kategori menjadi vektor padat.
-            2. **Concatenation:** Menggabungkan Embedding dengan fitur numerik (yang sudah dinormalisasi).
-            3. **Dense Layers:** Transformasi non-linear menggunakan MLP (Multi-Layer Perceptron).
+            * **Hybrid Input:** Mampu memproses data numerik (misal: *recency*) dan kategorikal (misal: *brand*) secara bersamaan.
+            * **Cold-Start Handling:** Tetap dapat memberikan rekomendasi untuk user/item baru berdasarkan kesamaan fitur, meskipun belum ada riwayat transaksi.
+            * **Scalability:** Proses inferensi sangat cepat karena vektor item dapat dihitung sebelumnya (*pre-computed*).
             """)
-            st.markdown("**Output:**")
-            st.code("Vektor Dimensi 32 (User Representation)", language="text")
+        
+        with col_t2:
+            st.subheader("Formulasi Matematis")
+            st.write("Skor relevansi ($S$) didefinisikan sebagai *Dot Product* antara vektor user ($u$) dan item ($v$):")
+            st.latex(r'''
+            S(u, v) = \langle u, v \rangle = \sum_{i=1}^{d} u_i v_i
+            ''')
+            st.caption("Dimana $d$ adalah dimensi embedding akhir (8 dimensi).")
 
-        with c_item:
-            st.subheader("🅱️ Item Tower")
-            st.markdown("**Input:**")
-            st.code("item_id, numeric_features, cat_features", language="text")
-            st.markdown("**Proses:**")
+    # --- TAB 2: ARSITEKTUR MODEL (CONFIG 5) ---
+    with tab2:
+        st.header("2. Spesifikasi Arsitektur Terbaik (Champion Model)")
+        st.write("""
+        Berdasarkan eksperimen *hyperparameter tuning* (Config 5), arsitektur berikut memberikan keseimbangan optimal 
+        antara metrik **Precision@10** dan **Coverage**.
+        """)
+
+        # Metric Cards
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("Embedding Dim", "32", "Latent Size")
+            st.metric("Output Dim", "8", "Final Vector")
+        with c2:
+            st.metric("Hidden Layers", "[32, 16]", "Deep Structure")
+            st.metric("Activation", "ReLU", "Non-Linearity")
+        with c3:
+            st.metric("Regularization", "Dropout 0.3", "Mencegah Overfitting")
+            st.metric("Learning Rate", "0.001", "Adam Optimizer")
+
+        st.divider()
+        
+        st.subheader("Detail Implementasi Layer")
+        st.markdown("Arsitektur terdiri dari dua jaringan saraf independen (*Twin Towers*) yang simetris:")
+
+        with st.expander("🅰️ User Tower Specification", expanded=True):
             st.markdown("""
-            1. **Embedding Layer:** Mengubah ID Item dan fitur kategori (Brand, Kategori) menjadi vektor.
-            2. **Concatenation:** Penggabungan dengan fitur numerik produk.
-            3. **Dense Layers:** Struktur identik dengan User Tower untuk menjaga keselarasan dimensi.
+            1.  **Input Layer:** Menerima `Customer ID` (Embedding) + Fitur Numerik (Normalized) + Fitur Kategori (Embedding).
+            2.  **Concatenation:** Penggabungan seluruh fitur menjadi satu vektor densitas tinggi.
+            3.  **Dense Block:**
+                * Layer 1: 32 Neuron (ReLU) + Dropout 0.3
+                * Layer 2: 16 Neuron (ReLU) + Dropout 0.3
+            4.  **Projection Head:** Layer Dense akhir dengan 8 Neuron (menghasilkan vektor $u$).
             """)
-            st.markdown("**Output:**")
-            st.code("Vektor Dimensi 32 (Item Representation)", language="text")
 
-    st.markdown("### Snippet Kode Implementasi")
-    st.write("Berikut adalah potongan kode asli yang mendefinisikan struktur input hibrida (Numerik + Kategorikal):")
-    st.code("""
-# Representasi User Tower (dari source code)
-u_id_emb = Flatten()(Embedding(n_users, embedding_dim)(user_id_input))
-# ... embedding kategori lainnya ...
-x_user = Concatenate()([u_id_emb, user_num_input] + u_cat_embs)
+        with st.expander("🅱️ Item Tower Specification", expanded=True):
+            st.markdown("""
+            1.  **Input Layer:** Menerima `Material ID` (Embedding) + Fitur Numerik + Fitur Kategori.
+            2.  **Concatenation:** Penggabungan seluruh fitur produk.
+            3.  **Dense Block:** Struktur identik dengan User Tower ([32, 16], ReLU, Dropout 0.3).
+            4.  **Projection Head:** Layer Dense akhir dengan 8 Neuron (menghasilkan vektor $v$).
+            """)
 
-# Transformasi Non-Linear
-for units in tower_layers:
-    x_user = Dense(units, activation='relu')(x_user)
-    x_user = Dropout(dropout_rate)(x_user)
+    # --- TAB 3: ALGORITMA TRAINING ---
+    with tab3:
+        st.header("3. Mekanisme Pembelajaran (Training)")
+        st.write("""
+        Selama fase pelatihan, model belajar untuk mendekatkan vektor pengguna dan item yang memiliki interaksi positif, 
+        serta menjauhkan mereka yang tidak berinteraksi.
+        """)
 
-# Final User Vector
-user_vec = Dense(8, activation='relu')(x_user) 
-    """, language="python")
+        st.code("""
+# Snippet Logika Training (Keras Functional API)
 
-    st.markdown("---")
+# 1. Forward Pass
+user_vec = user_tower(user_inputs)
+item_vec = item_tower(item_inputs)
 
-    # --- TAB 3: MEKANISME INFERENSI ---
-    st.header("3. Mekanisme Inferensi (Retrieval)")
-    st.write("""
-    Salah satu keunggulan utama arsitektur ini adalah efisiensi saat *serving* (penggunaan di aplikasi nyata). 
-    Proses prediksi tidak dilakukan dengan memasangkan user dengan jutaan barang satu per satu (yang akan sangat lambat), melainkan menggunakan teknik **Nearest Neighbor Search**.
-    """)
+# 2. Interaction Layer (Dot Product)
+# Menghitung kesamaan kosinus/dot product
+dot_interaction = Dot(axes=1, normalize=True)([user_vec, item_vec])
 
-    st.success("""
-    **Alur Algoritma pada Aplikasi:**
-    1.  **Pre-computation:** Semua Item diproses melalui *Item Tower* sekali saja untuk menghasilkan `Item Vectors`. Vektor ini disimpan dalam Index (menggunakan FAISS/Annoy).
-    2.  **Real-time Query:** Saat User Login, data user dimasukkan ke *User Tower* untuk menghasilkan `User Vector`.
-    3.  **Similarity Search:** Sistem mencari Item Vectors yang memiliki jarak terdekat (Dot Product tertinggi) dengan User Vector.
-    """)
+# 3. Output Layer (Probability)
+# Activation Sigmoid mengubah skor menjadi probabilitas (0-1)
+output = Dense(1, activation='sigmoid')(dot_interaction)
 
-    st.markdown("#### Implementasi pada Kode")
-    st.code("""
-def get_twotower_recommendations(customer_id):
-    # 1. Generate User Embedding secara Real-time
-    user_embedding = user_tower.predict(user_input)
-    
-    # 2. Pencarian Vektor Terdekat (Retrieval)
-    # 'index' berisi database vektor seluruh item
-    _, I = index.search(user_embedding, n_recs=10)
-    
-    # 3. Return ID Barang
-    return all_item_data.iloc[I[0]]['mid'].tolist()
-    """, language="python")
-    
+# 4. Optimization
+model.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=0.001))
+        """, language="python")
+
+        st.info("""
+        **Penjelasan:**
+        Lapisan `Dot` bertindak sebagai pengukur kesamaan. Fungsi aktivasi `Sigmoid` digunakan karena kita memodelkan masalah ini 
+        sebagai *Binary Classification* (Interaksi vs Non-Interaksi).
+        """)
+
+    # --- TAB 4: MEKANISME FAISS ---
+    with tab4:
+        st.header("4. Mekanisme Inferensi: Vector Search Engine")
+        st.write("""
+        Untuk kebutuhan aplikasi *real-time* dengan latensi rendah, sistem ini **tidak melakukan prediksi model satu-per-satu**.
+        Sistem menggunakan pendekatan **Approximate Nearest Neighbor (ANN)** menggunakan pustaka **FAISS (Facebook AI Similarity Search)**.
+        """)
+
+        st.subheader("Tahapan Proses:")
+        
+        st.markdown("""
+        **Tahap 1: Pre-Computation (Batch Processing)**
+        
+        Seluruh katalog produk diproses melalui *Item Tower* untuk menghasilkan vektor embedding statis. Proses ini dilakukan dalam *batch* besar untuk efisiensi.
+        """)
+        st.code("""
+# Generate embeddings untuk seluruh katalog (sekali jalan)
+item_tower_input = prepare_item_input(all_item_data)
+all_item_embeddings = item_tower.predict(item_tower_input, batch_size=4096)
+        """, language="python")
+
+        st.markdown("""
+        **Tahap 2: Indexing (FAISS Construction)**
+        
+        Vektor-vektor tersebut disimpan ke dalam struktur data indeks. Kami menggunakan `IndexFlatIP` (*Inner Product*) 
+        yang secara matematis ekuivalen dengan operasi *Dot Product* pada model.
+        """)
+        st.code("""
+import faiss
+
+# Inisialisasi Index berdasarkan Inner Product (Dot Product)
+dimension = 8  # Sesuai output model
+index = faiss.IndexFlatIP(dimension)
+
+# Menambahkan vektor ke memori
+index.add(all_item_embeddings.astype('float32'))
+        """, language="python")
+
+        st.markdown("""
+        **Tahap 3: Real-Time Retrieval**
+        
+        Saat simulasi dijalankan:
+        1. Data user diproses oleh *User Tower* $\rightarrow$ menghasilkan 1 vektor user.
+        2. Vektor user digunakan untuk *query* ke FAISS Index.
+        3. FAISS mengembalikan $K$ item dengan nilai *Inner Product* tertinggi.
+        """)
+
+        st.success("""
+        **Implikasi:**
+        Metode ini memisahkan beban komputasi. *Item Tower* yang berat hanya dijalankan sekali (offline), 
+        sedangkan saat *serving* hanya *User Tower* yang aktif, membuat respon aplikasi sangat cepat (< 50ms).
+        """)
+
     st.markdown("<br>", unsafe_allow_html=True)
-    st.info("Dengan metode ini, kompleksitas waktu pencarian dapat ditekan secara signifikan dibandingkan metode konvensional.")
-
     st.button("⬅️ Kembali ke Simulasi", on_click=go_to_simulation, key='btn_back_bottom')
 
 # ==========================================
