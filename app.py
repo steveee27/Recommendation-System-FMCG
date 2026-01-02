@@ -133,7 +133,7 @@ if st.session_state.page == "documentation":
             st.metric("Embedding Dim", "32", "Latent Size")
             st.metric("Output Dim", "8", "Final Vector")
         with c2:
-            st.metric("Hidden Layers", "[32, 16]", "Deep Structure")
+            st.metric("Hidden Layers", "[32, 16, 8]", "Deep Structure")
             st.metric("Activation", "ReLU", "Non-Linearity")
         with c3:
             st.metric("Regularization", "Dropout 0.3", "Mencegah Overfitting")
