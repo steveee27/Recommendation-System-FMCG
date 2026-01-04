@@ -78,10 +78,8 @@ if st.session_state.page == "documentation":
     
     st.title("Dokumentasi Teknis: Sistem Rekomendasi Two-Tower")
     st.markdown("""
-    Dokumentasi ini menjelaskan dasar konseptual, arsitektur model terbaik, serta mekanisme inferensi berbasis 
-    *vector search* yang diterapkan pada sistem rekomendasi Two-Tower Neural Network. 
-    Fokus pembahasan mencakup bagaimana representasi pelanggan dan produk dibangun, dilatih, 
-    serta dimanfaatkan untuk menghasilkan rekomendasi secara efisien dalam skala besar.
+    Dokumentasi ini menguraikan landasan teoritis, spesifikasi arsitektur terbaik, 
+    dan mekanisme inferensi *high-speed retrieval* yang diimplementasikan dalam sistem rekomendasi ini.
     """)
     st.divider()
 
@@ -92,148 +90,138 @@ if st.session_state.page == "documentation":
         "🚀 Mekanisme Inferensi (FAISS)"
     ])
 
-    # TAB 1: LANDASAN TEORI
     with tab1:
-        st.header("1. Landasan Teori")
+        st.header("1. Konsep Dasar:")
         
         st.write("""
-        Sistem rekomendasi ini dibangun menggunakan pendekatan *representation learning*. 
-        Berbeda dengan metode *collaborative filtering* tradisional yang hanya memanfaatkan interaksi 
-        antara ID pelanggan dan produk, arsitektur **Two-Tower Neural Network** memungkinkan integrasi 
-        fitur tambahan (*enriched features*) dari sisi pelanggan maupun produk.
+        Sistem ini dibangun di atas paradigma *Representation Learning*. Berbeda dengan pendekatan *Collaborative Filtering* tradisional (seperti *Matrix Factorization*) 
+        yang hanya mengandalkan interaksi ID pengguna dan item, arsitektur **Two-Tower** memungkinkan integrasi **fitur sampingan (*side features*)** yang kaya.
         """)
 
         st.info("""
-        **Prinsip Utama:**
-        Pendekatan ini bertujuan untuk mempelajari representasi laten pelanggan dan produk dalam satu ruang vektor bersama, 
-        sehingga tingkat relevansi dapat diukur berdasarkan kedekatan vektor di ruang tersebut.
+        **Prinsip Kerja Utama:**
+        Sistem bertujuan memetakan entitas **Pengguna (User)** dan **Barang (Item)** ke dalam **Ruang Vektor Laten Bersama (*Shared Latent Vector Space*)**.
+        Dalam ruang ini, relevansi diukur berdasarkan kedekatan geometris antar vektor.
         """)
 
         col_t1, col_t2 = st.columns(2)
         with col_t1:
-            st.subheader("Keunggulan Arsitektur Two-Tower")
+            st.subheader("Keunggulan Arsitektur")
             st.markdown("""
-            * **Integrasi fitur heterogen:** Memproses fitur numerik dan kategorikal secara bersamaan.
-            * **Menangani cold-start:** Tetap dapat memberikan rekomendasi untuk user/item baru berdasarkan kesamaan fitur, meskipun belum ada riwayat transaksi.
-            * **Skalabilitas tinggi:** Proses inferensi sangat cepat karena vektor item dapat dihitung sebelumnya (*pre-computed*).
+            * **Hybrid Input:** Mampu memproses data numerik (misal: *recency*) dan kategorikal (misal: *brand*) secara bersamaan.
+            * **Cold-Start Handling:** Tetap dapat memberikan rekomendasi untuk user/item baru berdasarkan kesamaan fitur, meskipun belum ada riwayat transaksi.
+            * **Scalability:** Proses inferensi sangat cepat karena vektor item dapat dihitung sebelumnya (*pre-computed*).
             """)
         
         with col_t2:
-            st.subheader("Formulasi Relevansi")
-            st.write("""
-            Relevansi antara pelanggan dan produk dihitung menggunakan operasi *dot product* 
-            pada embedding masing-masing.
-            """)
+            st.subheader("Formulasi Matematis")
+            st.write("Skor relevansi ($S$) didefinisikan sebagai *Dot Product* antara vektor user ($u$) dan item ($v$):")
             st.latex(r'''
             S(u, v) = \langle u, v \rangle = \sum_{i=1}^{d} u_i v_i
             ''')
-            st.caption("di mana $u$ adalah embedding pelanggan,  $v$ adalah embedding produk, $d$ adalah dimensi embedding akhir")
+            st.caption("Dimana $d$ adalah dimensi embedding akhir (8 dimensi).")
 
-    # TAB 2: ARSITEKTUR MODEL
     with tab2:
-        st.header("2. Arsitektur Model Two-Tower")
+        st.header("2. Spesifikasi Arsitektur Two Tower")
         st.write("""
-        Arsitektur Two-Tower yang digunakan merupakan hasil dari proses *hyperparameter tuning* 
-        dan menunjukkan performa terbaik pada metrik **Precision@10**, **Recall@10**, **NDCG@10**, dan **Coverage**.
+        Berdasarkan eksperimen penelitian, arsitektur berikut adalah arsitektur terbaik dari hasil hyperparameter tuning dengan memberikan keseimbangan optimal 
+        antara metrik **Precision@10**, **Recall@10**, **NDCG@10**, dan **Coverage**.
         """)
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.metric("Embedding Dim", "32", "Dimensi Awal")
-            st.metric("Output Embedding", "8", "Dimensi Akhir")
+            st.metric("Embedding Dim", "32", "Latent Size")
+            st.metric("Output Dim", "8", "Final Vector")
         with c2:
-            st.metric("Hidden Layers", "[32, 16, 8]", "Struktur")
-            st.metric("Activation", "ReLU", "Fungsi Aktivasi")
+            st.metric("Hidden Layers", "[32, 16, 8]", "Deep Structure")
+            st.metric("Activation", "ReLU", "Non-Linearity")
         with c3:
             st.metric("Regularization", "Dropout 0.3", "Mencegah Overfitting")
             st.metric("Learning Rate", "0.001", "Adam Optimizer")
 
         st.divider()
         
-        st.subheader("Detail Arsitektur")
-        st.markdown("Arsitektur terdiri dari dua neural network independen yang simetris:")
+        st.subheader("Detail Implementasi Layer")
+        st.markdown("Arsitektur terdiri dari dua neural network independen (*Twin Towers*) yang simetris:")
 
-        with st.expander("🅰️ Struktur User Tower", expanded=True):
+        with st.expander("🅰️ User Tower Specification", expanded=True):
             st.markdown("""
             1.  **Input Layer:** Menerima `Customer ID` (Embedding) + Fitur Numerik (Normalized) + Fitur Kategori (Embedding).
             2.  **Concatenation:** Penggabungan seluruh fitur user menjadi satu vektor densitas tinggi.
             3.  **Dense Block:**
                 * Layer 1: 32 Neuron (ReLU) + Dropout 0.3
                 * Layer 2: 16 Neuron (ReLU) + Dropout 0.3
-            4.  **Projection Head:** Layer Dense akhir dengan 8 Neuron (ReLU) (menghasilkan vektor $u$).
+            4.  **Projection Head:** Layer Dense akhir dengan 8 Neuron (menghasilkan vektor $u$).
             """)
 
-        with st.expander("🅱️ Struktur Item Tower", expanded=True):
+        with st.expander("🅱️ Item Tower Specification", expanded=True):
             st.markdown("""
             1.  **Input Layer:** Menerima `Material ID` (Embedding) + Fitur Numerik (Normalized) + Fitur Kategori (Embedding).
             2.  **Concatenation:** Penggabungan seluruh fitur item menjadi satu vektor densitas tinggi.
             3.  **Dense Block:**
                 * Layer 1: 32 Neuron (ReLU) + Dropout 0.3
                 * Layer 2: 16 Neuron (ReLU) + Dropout 0.3
-            4.  **Projection Head:** Layer Dense akhir dengan 8 Neuron (ReLU) (menghasilkan vektor $v$).
+            4.  **Projection Head:** Layer Dense akhir dengan 8 Neuron (menghasilkan vektor $u$).
             """)
 
-    # TAB 3: TRAINING
     with tab3:
-        st.header("3. Mekanisme Training")
-
+        st.header("3. Mekanisme Pembelajaran (Training)")
         st.write("""
-        Pada tahap pelatihan, model belajar untuk memaksimalkan kesamaan antara pasangan pelanggan–produk 
-        yang benar-benar berinteraksi, serta meminimalkan kesamaan untuk pasangan yang tidak relevan.
+        Selama fase pelatihan, model belajar untuk mendekatkan vektor pengguna dan item yang memiliki interaksi positif, 
+        serta menjauhkan mereka yang tidak berinteraksi.
         """)
 
         st.code("""
-# Interaksi antara embedding pelanggan dan produk
-dot_product = Dot(axes=1, normalize=True)([user_embedding, item_embedding])
+# Snippet Logika Training (Keras Functional API)
 
-# Lapisan klasifikasi
-x = Dense(8, activation='relu')(dot_product)
-x = Dropout(0.3)(x)
-output = Dense(1, activation='sigmoid')(x)
+# 1. Forward Pass
+user_vec = user_tower(user_inputs)
+item_vec = item_tower(item_inputs)
 
-# Kompilasi model
-model.compile(
-    optimizer=Adam(learning_rate=0.0005),
-    loss='binary_crossentropy'
-)
+# 2. Interaction Layer (Dot Product)
+# Menghitung kesamaan kosinus/dot product
+dot_interaction = Dot(axes=1, normalize=True)([user_vec, item_vec])
+
+# 3. Output Layer (Probability)
+# Activation Sigmoid mengubah skor menjadi probabilitas (0-1)
+output = Dense(1, activation='sigmoid')(dot_interaction)
+
+# 4. Optimization
+model.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=0.001))
         """, language="python")
 
         st.info("""
-        Lapisan `Dot` bertindak sebagai pengukur kesamaan.
-        Model dilatih sebagai masalah klasifikasi biner menggunakan *binary cross-entropy* (Interaksi vs Non-Interaksi). 
+        **Penjelasan:**
+        Lapisan `Dot` bertindak sebagai pengukur kesamaan. Fungsi aktivasi `Sigmoid` digunakan karena kita memodelkan masalah ini 
+        sebagai *Binary Classification* (Interaksi vs Non-Interaksi).
         """)
 
-    # TAB 4: FAISS
+    # --- TAB 4: MEKANISME FAISS ---
     with tab4:
-        st.header("4. Mekanisme Inferensi Berbasis Vector Similarity Search (FAISS)")
+        st.header("4. Mekanisme Inferensi: Vector Search Engine")
         st.write("""
-        Untuk mendukung proses rekomendasi yang efisien pada skala besar, sistem ini menggunakan 
-        **FAISS (Facebook AI Similarity Search)** sebagai *vector similarity search engine* 
-        dengan *IndexFlatIP* untuk melakukan pencarian produk paling relevan berdasarkan *inner product* antar embedding hasil model Two-Tower Neural Network.
+        Untuk kebutuhan aplikasi *real-time* dengan latensi rendah, sistem ini **tidak melakukan prediksi model satu-per-satu**.
+        Sistem menggunakan pendekatan **Approximate Nearest Neighbor (ANN)** menggunakan pustaka **FAISS (Facebook AI Similarity Search)**.
         """)
 
         st.subheader("Tahapan Proses:")
         
         st.markdown("""
-        **Tahap 1: Pre-Computation**
+        **Tahap 1: Pre-Computation (Batch Processing)**
         
-        Seluruh produk diproses satu kali melalui **Item Tower** untuk menghasilkan embedding produk.
-        Proses ini dilakukan secara *offline* dan bersifat *batch*, sehingga tidak membebani proses inferensi.
+        Seluruh katalog produk diproses melalui *Item Tower* untuk menghasilkan vektor embedding statis. Proses ini dilakukan dalam *batch* besar untuk efisiensi.
         """)
         st.code("""
-# Generate embedding produk (offline)
+# Generate embeddings untuk seluruh katalog (sekali jalan)
 item_tower_input = prepare_item_input(all_item_data)
 all_item_embeddings = item_tower.predict(item_tower_input, batch_size=4096)
         """, language="python")
 
         st.markdown("""
-        **Tahap 2: Pembuatan FAISS Index**
+        **Tahap 2: Indexing (FAISS Construction)**
         
-        Embedding produk disimpan ke dalam **FAISS Index** menggunakan 
-        **IndexFlatIP (Inner Product)** sebagai metrik kesamaan.
-        
-        Penggunaan *inner product* sesuai dengan mekanisme perhitungan relevansi 
-        pada model Two-Tower yang berbasis *dot product* antar embedding.
+        Vektor-vektor tersebut disimpan ke dalam struktur data indeks. Kami menggunakan `IndexFlatIP` (*Inner Product*) 
+        yang secara matematis ekuivalen dengan operasi *Dot Product* pada model.
         """)
         st.code("""
 import faiss
@@ -242,27 +230,23 @@ import faiss
 dimension = 8  # Sesuai output model
 index = faiss.IndexFlatIP(dimension)
 
-# Menambahkan embedding ke index
+# Menambahkan vektor ke memori
 index.add(all_item_embeddings.astype('float32'))
         """, language="python")
 
         st.markdown("""
         **Tahap 3: Real-Time Retrieval**
         
-        Saat sistem dijalankan:
-        1. Data pelanggan diproses melalui **User Tower** untuk menghasilkan embedding pelanggan.
-        2. Embedding tersebut digunakan sebagai *query vector* ke FAISS Index.
-        3. FAISS mengembalikan sejumlah produk dengan nilai *inner product* tertinggi 
-        sebagai hasil rekomendasi.
+        Saat simulasi dijalankan:
+        1. Data user diproses oleh *User Tower* dan menghasilkan 1 vektor user.
+        2. Vektor user digunakan untuk *query* ke FAISS Index.
+        3. FAISS mengembalikan $K$ item dengan nilai *Inner Product* tertinggi.
         """)
 
         st.success("""
-        Pendekatan ini memisahkan proses komputasi offline dan online secara jelas.
-        Item Tower hanya dijalankan sekali untuk seluruh katalog produk, 
-        sedangkan saat inferensi hanya User Tower yang dieksekusi.
-        
-        Dengan demikian, sistem mampu menghasilkan rekomendasi secara konsisten 
-        dengan model pelatihan dan memiliki latensi yang sangat rendah.
+        **Implikasi:**
+        Metode ini memisahkan beban komputasi. *Item Tower* yang berat hanya dijalankan sekali (offline), 
+        sedangkan saat *serving* hanya *User Tower* yang aktif, membuat respon aplikasi sangat cepat (< 50ms).
         """)
 
     st.markdown("<br>", unsafe_allow_html=True)
