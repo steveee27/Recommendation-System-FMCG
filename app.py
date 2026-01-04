@@ -271,9 +271,9 @@ elif st.session_state.page == "simulation":
 
     st.sidebar.header("⚙️ Filter Customer")
 
-    available_users = list(user_map.keys())
+    available_users = sorted(user_map.keys(), key=lambda x: int(x))
     selected_user_id = st.sidebar.selectbox(
-        "1. Pilih Customer ID:", 
+        "1. Pilih Customer ID:",
         available_users,
         help="Cari atau pilih ID Customer dari daftar."
     )
